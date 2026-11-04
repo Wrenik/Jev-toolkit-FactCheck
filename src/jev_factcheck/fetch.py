@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urljoin
 
+from . import pdftext
 from .htmltext import extract_text
 from .netguard import BlockedURL, Resolver, Target, parse_target, resolve_public, system_resolver
 
@@ -33,7 +34,7 @@ USER_AGENT = "jev-factcheck/0.1 (learning project; checks quotes in cited pages;
 ALLOWED_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 MAX_BYTES = 2_000_000
 MAX_REDIRECTS = 5
-CONNECT_TIMEOUT = 8.0
+CONNECT_TIMEOUT = 5.0
 TOTAL_TIMEOUT = 20.0
 
 
@@ -56,6 +57,7 @@ class FetchResult:
     text: str = ""
     title: str = ""
     dropped_hidden_chars: int = 0
+    dropped_boilerplate_chars: int = 0
     from_cache: bool = False
     redirects: list[str] = field(default_factory=list)
 
@@ -87,9 +89,19 @@ class _PinnedHTTP(http.client.HTTPConnection):
         self.sock = socket.create_connection((self._ip, self.port), timeout=self.timeout)
 
 
+def _tls_context(system_store: bool) -> ssl.SSLContext:
+    """Default verification. `system_store` asks the OS verifier instead (the `truststore` package, if present):
+    Python on Windows only knows the roots already installed locally, so a valid chain can fail there."""
+    if system_store:
+        import truststore  # optional; ImportError is handled by the caller
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return ssl.create_default_context()
+
+
 class _PinnedHTTPS(http.client.HTTPSConnection):
-    def __init__(self, host, port, ip, timeout):
-        super().__init__(host, port, timeout=timeout, context=ssl.create_default_context())
+    def __init__(self, host, port, ip, timeout, system_store=False):
+        super().__init__(host, port, timeout=timeout, context=_tls_context(system_store))
         self._ip = ip
 
     def connect(self):
@@ -112,8 +124,21 @@ class _HttpResponse:
 
 
 def real_transport(target: Target, ip: str, timeout: float) -> Response:
-    cls = _PinnedHTTPS if target.scheme == "https" else _PinnedHTTP
-    conn = cls(target.host, target.port, ip, timeout)
+    try:
+        return _request(target, ip, timeout, system_store=False)
+    except ssl.SSLCertVerificationError:
+        try:
+            import truststore  # noqa: F401
+        except ImportError:
+            raise
+        return _request(target, ip, timeout, system_store=True)  # still verifies, with the OS trust store
+
+
+def _request(target: Target, ip: str, timeout: float, *, system_store: bool) -> Response:
+    if target.scheme == "https":
+        conn: http.client.HTTPConnection = _PinnedHTTPS(target.host, target.port, ip, timeout, system_store)
+    else:
+        conn = _PinnedHTTP(target.host, target.port, ip, timeout)
     default_port = 443 if target.scheme == "https" else 80
     host_header = target.host if target.port == default_port else f"{target.host}:{target.port}"
     conn.request(
@@ -122,7 +147,7 @@ def real_transport(target: Target, ip: str, timeout: float) -> Response:
         headers={
             "Host": host_header,
             "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9" + (",application/pdf;q=0.5" if pdftext.available() else ""),
             "Accept-Encoding": "gzip, deflate",
             "Connection": "close",
         },
@@ -188,6 +213,17 @@ def _read_body(resp: Response, limit: int) -> tuple[bytes | None, str]:
         if len(raw) > limit:
             return None, "response body larger than the cap"
     return bytes(raw), ""
+
+
+def _dial_order(addrs: list[str]) -> list[str]:
+    """IPv4 and IPv6 alternating, IPv4 first. A host whose IPv6 route is dead (common) must not cost a full connect
+    timeout per address before the working IPv4 address is tried (measured: 8 s each, twice, on a plain home line)."""
+    v4 = [a for a in addrs if ":" not in a]
+    v6 = [a for a in addrs if ":" in a]
+    out: list[str] = []
+    for i in range(max(len(v4), len(v6))):
+        out += v4[i : i + 1] + v6[i : i + 1]
+    return out
 
 
 class Fetcher:
@@ -273,7 +309,7 @@ class Fetcher:
             self._wait_politely(target.host)
             resp = None
             last_error = ""
-            for ip in addrs[:3]:  # a few addresses, all already verified public
+            for ip in _dial_order(addrs)[:4]:  # a few addresses, all already verified public
                 try:
                     resp = self.transport(target, ip, min(CONNECT_TIMEOUT, max(0.5, deadline - self._clock())))
                     break
@@ -296,9 +332,11 @@ class Fetcher:
                 ctype = ctype_full.split(";")[0].strip()
                 if resp.status != 200:
                     return FetchResult(url, False, "http_error", f"HTTP {resp.status}{_HTTP_HINTS.get(resp.status, '')}", current, resp.status, ctype, redirects=chain)
-                if ctype and ctype not in ALLOWED_TYPES:
+                is_pdf = ctype == "application/pdf" and pdftext.available()
+                if ctype and ctype not in ALLOWED_TYPES and not is_pdf:
                     kind = "PDF" if ctype == "application/pdf" else ctype
-                    hint = "; cite an HTML page that has the text" if kind == "PDF" else ""
+                    hint = ("; cite an HTML page that has the text, or install the 'pdf' extra (pip install jev-toolkit-factcheck[pdf])"
+                            if kind == "PDF" else "")
                     return FetchResult(url, False, "unsupported_type", f"content type {kind} is not read{hint}", current, 200, ctype, redirects=chain)
                 declared = resp.headers.get("content-length", "")
                 if declared.isdigit() and int(declared) > self.max_bytes * 2:
@@ -313,13 +351,20 @@ class Fetcher:
                     return FetchResult(url, False, "too_large", why, current, 200, ctype, redirects=chain)
             finally:
                 resp.close()
-            page = extract_text(_decode(body, ctype_full), ctype or "text/html")
+            if is_pdf:
+                try:
+                    page = pdftext.extract_pdf(body)
+                except ValueError as exc:
+                    return FetchResult(url, False, "unsupported_type", f"PDF not read: {exc}", current, 200, ctype, redirects=chain)
+            else:
+                page = extract_text(_decode(body, ctype_full), ctype or "text/html")
             if not page.text.strip():
                 return FetchResult(
-                    url, False, "empty", "no readable text (script-rendered or empty page?)", current, 200, ctype,
+                    url, False, "empty", "no readable text (script-rendered, scanned PDF without a text layer, or empty page?)", current, 200, ctype,
                     dropped_hidden_chars=page.dropped_chars, redirects=chain,
                 )
-            return FetchResult(url, True, "ok", "", current, 200, ctype, page.text, page.title, page.dropped_chars, redirects=chain)
+            return FetchResult(url, True, "ok", "", current, 200, ctype, page.text, page.title, page.dropped_chars,
+                               page.boilerplate_chars, redirects=chain)
         return FetchResult(url, False, "too_many_redirects", f"more than {MAX_REDIRECTS}", redirects=chain)
 
 

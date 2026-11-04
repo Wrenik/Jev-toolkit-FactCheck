@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .fetch import FetchResult
+from .fragment import deep_link
 from .judging import JudgeOutcome
 from .match import _NEGATIONS, MatchResult, normalise
 from .schema import Claim
@@ -66,12 +67,21 @@ class ClaimResult:
     source_note: str = ""
     flags: list[str] = field(default_factory=list)  # claim-vs-quote checks (numbers, negation); see claim_flags
 
+    @property
+    def deep_link(self) -> str:
+        """Source URL with a `#:~:text=` fragment that scrolls to and highlights the matched quote ("" if none)."""
+        m = self.match
+        if not m or not m.found or not self.source_text or "pdf" in str(self.fetch.get("content_type", "")):
+            return ""
+        return deep_link(self.claim.url, self.source_text, m.segments or [(m.start, m.end)], m.occurrences)
+
     def to_dict(self, with_text: bool = False) -> dict[str, Any]:
         d: dict[str, Any] = {
             "id": self.claim.id, "claim": self.claim.claim, "url": self.claim.url, "quote": self.claim.quote,
             "state": self.state, "reason": self.reason, "action": self.action, "explanation": self.explanation,
             "fetch": self.fetch, "match": self.match.to_dict() if self.match else None,
             "source_flags": self.source_flags, "source_note": self.source_note, "flags": self.flags,
+            "deep_link": self.deep_link,
         }
         if self.judge:
             j = self.judge

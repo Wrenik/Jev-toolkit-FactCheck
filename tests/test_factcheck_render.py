@@ -42,7 +42,10 @@ def test_html_is_safe_and_self_contained():
     assert "<script" not in out.lower().replace("&lt;script", "")
     assert "<img" not in out and "onerror=" not in re.sub(r"&lt;[^>]*", "", out)
     assert "&lt;script&gt;" in out
-    assert not re.search(r'<[^>]*\s(src|href|action)\s*=', out)
+    assert not re.search(r'<[^>]*\s(src|action)\s*=', out)
+    hrefs = re.findall(r'<a [^>]*href="([^"]*)"[^>]*>', out)  # only the per-claim deep links, http(s) with a text fragment
+    assert hrefs and all(h.startswith("https://") and "#:~:text=" in h for h in hrefs)
+    assert all('rel="noopener noreferrer nofollow"' in a for a in re.findall(r"<a [^>]*>", out))
     assert not re.search(r"url\(|@import", out)
 
 

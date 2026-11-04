@@ -16,6 +16,10 @@ First public version. Cut from the jev-toolkit monorepo and then reviewed.
 - `claims.json` JSON Schema, examples, copy-paste prompt and Claude skill snippet.
 - Claim-vs-quote flags (number missing from the quote, negation differs), page text SHA-256 in results.
 
+### Round 2 (first run on real pages)
+- Added: text-fragment deep links in the report and `deep_link` in results; optional PDF input (`[pdf]` extra, pypdf); `docs/PRIOR_ART.md`; boilerplate (`nav`/`footer`) removal; reference markers like `[9]` ignored on the source side (flagged); `FetchResult.dropped_boilerplate_chars`.
+- Fixed: IPv6 dead ends made fetches take 8 to 18 s (IPv4 first now); Windows certificate store failures (OS store fallback); newlines inside HTML paragraphs; slow worst case on 2 MB pages (faster normalisation, cached page index, similar-passage search skipped above 1 M characters).
+
 ### Fixed in the pre-release review
 - `<meta charset="...">` with quotes was ignored; unlabelled legacy pages are now decoded as Windows-1252.
 - NAT64 / SIIT / site-local IPv6 and `0.0.0.0/8` were treated as public.

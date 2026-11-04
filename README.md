@@ -29,6 +29,8 @@ python -m pip install -e . --no-deps        # for the tests also: python -m pip 
 python -m pip install -e ../Jev-toolkit-Scanner --no-deps
 ```
 
+Optional PDF input: `python -m pip install pypdf` (or the `[pdf]` extra).
+
 Once public: `pip install "jev-toolkit-factcheck @ git+https://github.com/Wrenik/Jev-toolkit-FactCheck.git"` (with the scanner: `pip install "jev-toolkit-factcheck[scanner] @ git+..."`). Data (logs, cache, report defaults) lives in `JEV_HOME` (default `~/.jev-toolkit`); a `.env` with `TYPESAFE_API_KEY` there is only needed for the real judge. The scanner is **optional**: without it the built-in rules in `jev_factcheck.guard` are used on their own.
 
 ## Try it in 60 seconds (offline, no key)

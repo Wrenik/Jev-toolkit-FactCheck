@@ -15,7 +15,8 @@ dependencies = [
 # Optional: the injection scanner adds its offline layers 1-2 to the passage check. Without it the
 # built-in rules in jev_factcheck.guard are used on their own.
 scanner = ["jev-toolkit-scanner @ git+https://github.com/Wrenik/Jev-toolkit-Scanner.git"]
-dev = ["pytest>=8"]
+pdf = ["pypdf>=4"]
+dev = ["pytest>=8", "pypdf>=4"]
 
 [build-system]
 requires = ["setuptools>=69"]

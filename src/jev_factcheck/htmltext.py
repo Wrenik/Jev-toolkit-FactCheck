@@ -5,6 +5,11 @@ script/style/noscript/template/svg/iframe/head contents and elements a reader ca
 (`hidden`, `aria-hidden="true"`, inline `display:none` / `visibility:hidden`). A quote that only
 exists in hidden text is therefore "not found": a person reading the page would not see it, and
 hidden text is the usual place for injected instructions. The number of dropped characters is reported.
+
+Boilerplate is dropped too, conservatively: `<nav>`, `<footer>` and elements with role navigation / banner /
+contentinfo (menus, site chrome, link lists). Article text, sidebars (`<aside>`), headers and tables are kept, so a
+quote is only ever "not found" because of boilerplate when it was in a menu or a footer. Counted separately
+(`boilerplate_chars`). This is a hand-rolled rule set, not a readability model: see docs/PRIOR_ART.md.
 """
 
 from __future__ import annotations
@@ -19,6 +24,8 @@ _BLOCK = {
     "p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "header", "footer", "h1", "h2", "h3",
     "h4", "h5", "h6", "blockquote", "pre", "dd", "dt", "dl", "figure", "figcaption", "main", "aside", "nav", "form",
 }
+_BOILER_TAGS = {"nav", "footer"}
+_BOILER_ROLES = {"navigation", "banner", "contentinfo"}
 _HIDDEN_STYLE = re.compile(r"(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?\s*(?:;|$))", re.I)
 
 
@@ -27,6 +34,7 @@ class PageText:
     text: str
     title: str
     dropped_chars: int  # text inside hidden / non-visible elements that was not kept
+    boilerplate_chars: int = 0  # text inside nav / footer / banner elements that was not kept
 
 
 class _Extractor(HTMLParser):
@@ -37,6 +45,9 @@ class _Extractor(HTMLParser):
         self._skip: list[str] = []
         self._in_title = False
         self.dropped = 0
+        self.boilerplate = 0
+        self._pre = 0  # depth of <pre>/<textarea>: the only place where newlines in the source are real line breaks
+        self._boiler = False  # the current skipped region is boilerplate, not hidden text
 
     def handle_starttag(self, tag, attrs):
         if tag in _VOID:
@@ -45,6 +56,8 @@ class _Extractor(HTMLParser):
             return
         if tag == "title":
             self._in_title = True
+        if tag in ("pre", "textarea") and not self._skip:
+            self._pre += 1
         if tag == "body" and self._skip and self._skip[0] == "head":
             self._skip = []  # a <head> that was never closed must not swallow the page
         if self._skip:
@@ -57,7 +70,9 @@ class _Extractor(HTMLParser):
             or a.get("aria-hidden", "").lower() == "true"
             or bool(_HIDDEN_STYLE.search(a.get("style", "")))
         )
-        if hidden:
+        boiler = tag in _BOILER_TAGS or a.get("role", "").lower() in _BOILER_ROLES
+        if hidden or boiler:
+            self._boiler = boiler and not hidden
             self._skip.append(tag)
         elif tag in _BLOCK:
             self.parts.append("\n")
@@ -69,6 +84,8 @@ class _Extractor(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "title":
             self._in_title = False
+        if tag in ("pre", "textarea") and self._pre and not self._skip:
+            self._pre -= 1
         if self._skip:
             if tag in self._skip:
                 while self._skip and self._skip.pop() != tag:
@@ -82,10 +99,14 @@ class _Extractor(HTMLParser):
             self.title_parts.append(data)
         if self._skip:
             if not data.isspace():
-                self.dropped += len(data)
+                if self._boiler:
+                    self.boilerplate += len(data)
+                else:
+                    self.dropped += len(data)
             return
         # The <title> lives in <head>, which is skipped; keep body text only.
-        self.parts.append(data)
+        # Whitespace in HTML text, newlines included, is one space; only <br> and block elements break lines.
+        self.parts.append(data if self._pre else re.sub(r"\s+", " ", data))
 
 
 def _tidy(text: str) -> str:
@@ -117,5 +138,5 @@ def extract_text(raw: str, content_type: str = "text/html") -> PageText:
             p.close()
         except Exception:  # the parser is lenient; if it ever raises, fall back to nothing rather than crash
             return PageText("", "", 0)
-        return PageText(_tidy("".join(p.parts)), _tidy(" ".join(p.title_parts)), p.dropped)
+        return PageText(_tidy("".join(p.parts)), _tidy(" ".join(p.title_parts)), p.dropped, p.boilerplate)
     return PageText(_tidy(raw), "", 0)

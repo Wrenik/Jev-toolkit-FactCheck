@@ -37,6 +37,10 @@ MIN_SEGMENT_CHARS = 8  # each piece around an ellipsis
 WIDE_GAP_CHARS = 3000  # an ellipsis that skips more than this is flagged "wide_gap"
 NEAR_THRESHOLD = 0.80  # token-level similarity to report a near match at all
 STITCH_MIN_PIECE = 20
+# Above this many (normalised) characters the similar-passage search is skipped: tokenising and indexing a 2 MB page
+# costs about a second per page. Exact / normalised / elided / stitched matching still run on any size; a quote that
+# is only *similar* is then reported as not_found with the flag "near_search_skipped" (never as found).
+NEAR_MAX_CHARS = 1_000_000
 
 _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−﹘﹣－"), "-")
 _QUOTES = {
@@ -50,6 +54,11 @@ _NUMBER_WORDS = set(
     "nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand million billion trillion half double triple "
     "first second third fourth fifth majority minority".split()
 )
+# printable ASCII except '-' (and except runs of spaces): normalisation of these is just lower-casing
+_PLAIN_RUN = re.compile(r"[!-,.-~](?:[!-,.-~]| (?=[!-,.-~]))*")
+_PLAIN_RUN_NO_BRACKET = re.compile(r"[!-,.-Z\-~](?:[!-,.-Z\-~]| (?=[!-,.-Z\-~]))*")  # same, but stops at '['
+# Reference markers that reading renders as superscripts but plain text keeps inline: [9], [a], [IV], [citation needed], [note 3].
+_MARKER = re.compile(r"\[(?:\d{1,3}|[a-z]|[ivx]{1,4}|citation needed|note \d{1,3}|nb \d{1,3})\]", re.I)
 _ELLIPSIS = re.compile(r"\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3,}|…)\s*")
 _TOKEN = re.compile(r"\d[\d.,]*\d%?|\d%?|[^\W\d_]+(?:'[^\W\d_]+)?|\S")
 
@@ -64,13 +73,28 @@ class Normalised:
 
 
 @functools.lru_cache(maxsize=8)  # many claims cite the same page; normalising 2 MB is the slow part
-def normalise(original: str) -> Normalised:
+def normalise(original: str, skip_markers: bool = False) -> Normalised:
+    """`skip_markers` also removes reference markers like [9] (used for the source only, as a fallback)."""
+    run_re = _PLAIN_RUN_NO_BRACKET if skip_markers else _PLAIN_RUN
     out: list[str] = []
     starts: list[int] = []
     ends: list[int] = []
     n = len(original)
     i = 0
     while i < n:
+        if skip_markers and original[i] == "[":
+            mk = _MARKER.match(original, i)
+            if mk:
+                i = mk.end()
+                continue
+        run = run_re.match(original, i)
+        if run:  # fast path: most of a page is plain ASCII, handled in bulk
+            j = run.end()
+            out.extend(run.group().lower())
+            starts.extend(range(i, j))
+            ends.extend(range(i + 1, j + 1))
+            i = j
+            continue
         ch = original[i]
         if ch in _INVISIBLE:
             i += 1
@@ -246,6 +270,14 @@ def _match_quote(original: str, quote: str) -> MatchResult:
             s, e = _span(norm, hits[0], hits[0] + len(nq))
             return MatchResult("normalised", s, e, [(s, e)], len(hits), 1.0, flags=flags)
 
+    # 2b. Same, ignoring reference markers in the source ("tall,[9] about" for the quoted "tall, about").
+    if nq and "[" in original:
+        nm = normalise(original, True)
+        hits = _find_all(nm.text, nq)
+        if hits:
+            s, e = _span(nm, hits[0], hits[0] + len(nq))
+            return MatchResult("normalised", s, e, [(s, e)], len(hits), 1.0, flags=flags + ["reference_markers_ignored"])
+
     # 3. Ellipsis: every piece, in order.
     pieces = [p for p in _ELLIPSIS.split(q) if p.strip()]
     if len(pieces) > 1 or _ELLIPSIS.search(q):
@@ -260,6 +292,9 @@ def _match_quote(original: str, quote: str) -> MatchResult:
         return stitched
 
     # 5. Near match with a diff of numbers and negations.
+    if len(norm.text) > NEAR_MAX_CHARS:
+        return MatchResult("not_found", flags=flags + ["near_search_skipped"],
+                           note="no exact passage; the page is too large for the similar-passage search")
     near = _near(norm, nq)
     if near is not None:
         near.flags = flags + near.flags
@@ -327,28 +362,34 @@ def _is_critical(token: str) -> bool:
     return any(c.isdigit() for c in token) or token in _NEGATIONS or token in _NUMBER_WORDS or token.endswith("n't")
 
 
+@functools.lru_cache(maxsize=2)  # a page with many claims is tokenised once; this is the other slow part of a 2 MB page
+def _doc_index(text: str):
+    dt = _tokens(text)
+    dwords = [t[0] for t in dt]
+    index: dict[tuple[str, ...], list[int]] = {}
+    for i in range(len(dwords) - 2):
+        index.setdefault((dwords[i], dwords[i + 1], dwords[i + 2]), []).append(i)
+    counts: dict[str, int] = {}
+    for w in dwords:
+        counts[w] = counts.get(w, 0) + 1
+    return dt, dwords, index, counts
+
+
 def _near(norm: Normalised, nq: str) -> MatchResult | None:
     qt = _tokens(nq)
     if len(qt) < 4:
         return None
-    dt = _tokens(norm.text)
+    dt, dwords, index, counts = _doc_index(norm.text)
     if len(dt) < 4:
         return None
     qwords = [t[0] for t in qt]
-    dwords = [t[0] for t in dt]
     n = 3
-    index: dict[tuple[str, ...], list[int]] = {}
-    for i in range(len(dwords) - n + 1):
-        index.setdefault(tuple(dwords[i : i + n]), []).append(i)
     votes: dict[int, int] = {}
     for j in range(len(qwords) - n + 1):
         for pos in index.get(tuple(qwords[j : j + n]), [])[:200]:
             votes[pos - j] = votes.get(pos - j, 0) + 1
     # Also seed from single rare-ish words so a number swap in a short quote still finds its place.
     if not votes:
-        counts: dict[str, int] = {}
-        for w in dwords:
-            counts[w] = counts.get(w, 0) + 1
         for j, w in enumerate(qwords):
             if len(w) > 3 and counts.get(w, 0) <= 3 and w.isalpha():
                 for pos in [i for i, d in enumerate(dwords) if d == w][:3]:

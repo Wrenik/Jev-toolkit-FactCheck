@@ -1,7 +1,7 @@
 """Static HTML report: the answer text with each claim marked; hover/focus shows the evidence.
 
 Safety: one self-contained file, no scripts, no remote resources, strict CSP meta, every piece of
-text passes through html.escape, URLs are shown as text (not links). Works without hover: claims
+text passes through html.escape, the source URL is shown as text; the only link is the per-claim "open at the quote" deep link (http/https, noopener, no referrer). Works without hover: claims
 carry footnote numbers and every claim's evidence is also listed under the text (and in print).
 """
 
@@ -87,6 +87,10 @@ def _detail(res: ClaimResult, n: int, compact: bool) -> str:
     h.append(f"<div>{escape(res.explanation)}</div>")
     h.append(f'<div class="kv"><b>Claim:</b> {escape(res.claim.claim)}</div>')
     h.append(f'<div class="kv"><b>Source:</b> <code>{escape(res.claim.url)}</code></div>')
+    link = res.deep_link
+    if link and not compact:
+        h.append(f'<div class="kv"><a href="{escape(link, quote=True)}" target="_blank" rel="noopener noreferrer nofollow">'
+                 "Open the source at the quote</a> (browsers with text-fragment support scroll to and highlight it; others just open the page)</div>")
     if res.fetch.get("title"):
         h.append(f'<div class="kv"><b>Page title:</b> {escape(str(res.fetch["title"]))}</div>')
     if not compact:

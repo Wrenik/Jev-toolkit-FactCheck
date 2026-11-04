@@ -72,7 +72,8 @@ def test_decode_meta_charset_quoted_unquoted_and_fallbacks():
     assert _decode("hi ünï".encode("utf-16"), "text/html") == "hi ünï"
 
 
-def test_pdf_and_paywall_statuses_say_what_to_do():
+def test_pdf_and_paywall_statuses_say_what_to_do(monkeypatch):
+    monkeypatch.setattr("jev_factcheck.pdftext.available", lambda: False)
     f = Fetcher(transport=Net({"http://a.test/p": FakeResp(headers={"Content-Type": "application/pdf"}, body=b"%PDF-1.7"),
                                "http://a.test/g": FakeResp(402)}), resolver=PUB, per_host_delay=0)
     assert "HTML page" in f.fetch("http://a.test/p").detail
