@@ -1,0 +1,15 @@
+{
+  "set": "tricky",
+  "note": "Judge-only pairs, passages inline, no network. Written as examples of subtle cases and NOT tuned on: the judge questions were fixed before these were run. expected_relation is the author's label; expected_out_of_context is true when the quote reads differently in its context, null when either answer is defensible.",
+  "pairs": [
+    {"id": "t1", "claim": "The drug cut deaths by 40%.", "quote": "the drug cut deaths by 40%", "passage": "Early analysis suggested the drug cut deaths by 40%, but the final analysis found no significant difference in mortality.", "expected_relation": "contradicts", "expected_out_of_context": true},
+    {"id": "t2", "claim": "The treatment improved recovery.", "quote": "Recovery was 3% higher in the treatment group", "passage": "Recovery was 3% higher in the treatment group (p = 0.41), a difference that was not statistically significant.", "expected_relation": "not_enough", "expected_out_of_context": null},
+    {"id": "t3", "claim": "The vaccine prevents infection.", "quote": "The vaccine reduced the risk of severe disease by 90%.", "passage": "The vaccine reduced the risk of severe disease by 90%. It was not tested for its effect on transmission or infection.", "expected_relation": "not_enough", "expected_out_of_context": null},
+    {"id": "t4", "claim": "The Nova smartphone has a 12-inch screen.", "quote": "The Nova tablet has a 12-inch screen.", "passage": "The Nova tablet has a 12-inch screen. The Nova smartphone has a 6-inch screen.", "expected_relation": "unrelated", "expected_out_of_context": null},
+    {"id": "t5", "claim": "Mount Kell is 4,200 m high.", "quote": "Mount Kell rises to 4,200 metres above sea level.", "passage": "Mount Kell rises to 4,200 metres above sea level.", "expected_relation": "supports", "expected_out_of_context": false},
+    {"id": "t6", "claim": "The company will lay off 500 workers.", "quote": "it could lay off 500 workers", "passage": "If sales fall further, the company said it could lay off 500 workers.", "expected_relation": "not_enough", "expected_out_of_context": true},
+    {"id": "t7", "claim": "The bridge is open to heavy trucks.", "quote": "The bridge is closed to heavy trucks since 2020.", "passage": "The bridge is closed to heavy trucks since 2020.", "expected_relation": "contradicts", "expected_out_of_context": false},
+    {"id": "t8", "claim": "Coffee cures cancer.", "quote": "coffee cures cancer", "passage": "A viral post claimed that coffee cures cancer; the researchers called this false.", "expected_relation": "contradicts", "expected_out_of_context": true},
+    {"id": "t9", "claim": "About 10 million people live in the city.", "quote": "The city has a population of 9.8 million.", "passage": "The city has a population of 9.8 million.", "expected_relation": "supports", "expected_out_of_context": false}
+  ]
+}

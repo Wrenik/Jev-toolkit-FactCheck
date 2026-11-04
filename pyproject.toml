@@ -1,0 +1,33 @@
+[project]
+name = "jev-toolkit-factcheck"
+version = "0.1.0"
+description = "Fact checker with hover evidence: LLM-cited verbatim quotes are located in the fetched source (offsets), a judgement model (currently TypeSafe Jev) rates support, everything is traceable in a static HTML report."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Eric Ährlund" }]
+requires-python = ">=3.11"
+dependencies = [
+    "jev-toolkit-usage @ git+https://github.com/Wrenik/Jev-toolkit-usage.git",
+]
+
+[project.optional-dependencies]
+# Optional: the injection scanner adds its offline layers 1-2 to the passage check. Without it the
+# built-in rules in jev_factcheck.guard are used on their own.
+scanner = ["jev-toolkit-scanner @ git+https://github.com/Wrenik/Jev-toolkit-Scanner.git"]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+jev_factcheck = ["data/*.toml", "evalset/*.json", "evalset/pages/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: calls the real Jev API (costs a fraction of a cent; needs TYPESAFE_API_KEY)"]
+addopts = "-m 'not live'"

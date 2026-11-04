@@ -1,0 +1,26 @@
+{
+ "https://fixture.test/bridge": "bridge.html",
+ "https://fixture.test/clinic": "clinic.html",
+ "https://fixture.test/council": "council.html",
+ "https://fixture.test/battery": "battery.html",
+ "https://fixture.test/lake": "lake.html",
+ "https://fixture.test/spa": "spa.html",
+ "https://fixture.test/paywall": {
+  "status": "http_error",
+  "detail": "HTTP 402 (simulated paywall)",
+  "http_status": 402
+ },
+ "https://fixture.test/report.pdf": {
+  "status": "unsupported_type",
+  "detail": "content type PDF is not read (simulated)"
+ },
+ "https://fixture.test/law": "law.html",
+ "https://fixture.test/history": "history.html",
+ "https://fixture.test/product": "product.html",
+ "https://fixture.test/weather": "weather.html",
+ "https://fixture.test/missing": {
+  "status": "http_error",
+  "detail": "HTTP 404 (simulated)",
+  "http_status": 404
+ }
+}

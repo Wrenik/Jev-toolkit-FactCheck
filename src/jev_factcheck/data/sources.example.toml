@@ -1,0 +1,29 @@
+# Example source lists for jev_factcheck. This is DATA, curated by YOU (the user), not by the tool.
+# Copy to var/factcheck-sources.toml and edit. The tool makes no claim about source quality beyond
+# what is written here; "unusual" means "not on this topic's trusted list", which is a flag to look
+# at, never a verdict that the source is wrong.
+#
+# Matching: an entry matches the host itself and any subdomain ("who.int" matches "www.who.int").
+# "*.edu" style entries match any host ending in ".edu".
+version = 1
+curated_by = "example list shipped with the repository; replace with your own"
+
+[topics.general]
+trusted = []          # empty = no opinion, nothing is flagged unusual for this topic
+suspect = []
+
+[topics.health]
+trusted = ["who.int", "nih.gov", "cdc.gov", "nhs.uk", "cochranelibrary.com", "*.edu"]
+suspect = []
+
+[topics.science]
+trusted = ["nature.com", "science.org", "arxiv.org", "nasa.gov", "*.edu"]
+suspect = []
+
+[topics.law]
+trusted = ["*.gov", "europa.eu", "eur-lex.europa.eu", "riksdagen.se", "lagen.nu"]
+suspect = []
+
+[topics.news]
+trusted = ["reuters.com", "apnews.com", "bbc.co.uk", "svt.se"]
+suspect = []
