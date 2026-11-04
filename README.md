@@ -24,7 +24,7 @@ python -m venv ~/jev-venv
 source ~/jev-venv/bin/activate              # Windows PowerShell: ~\jev-venv\Scripts\Activate.ps1
 cd ~/jev/Jev-toolkit-FactCheck
 python -m pip install -e ../Jev-toolkit-usage
-python -m pip install -e . --no-deps        # add ".[dev]" for the tests
+python -m pip install -e . --no-deps        # for the tests also: python -m pip install pytest
 # optional: the injection scanner adds its offline layers to the passage check
 python -m pip install -e ../Jev-toolkit-Scanner --no-deps
 ```
