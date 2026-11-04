@@ -20,6 +20,9 @@ LABELS = {
     "quote_not_found": ("✗", "Quote not found in the source"),
     "source_unavailable": ("∅", "Source unavailable"),
     "quote_only": ("~", "Quote found, support not judged"),
+    # States produced by a source policy (Jev-toolkit-Sources); harmless when unused.
+    "forbidden_source": ("⛔", "Source not approved by the policy"),
+    "untraceable": ("?", "No source given (not approved)"),
 }
 
 CSS = """
@@ -37,6 +40,8 @@ h1{font-size:1.3rem;margin:.2rem 0}h2{font-size:1.05rem;margin:2rem 0 .5rem}
 .s-quote_not_found{border-color:var(--bad);border-bottom-style:wavy;border-bottom-width:2px;text-decoration:none}
 .s-source_unavailable{border-color:var(--na);border-bottom-style:dotted}
 .s-quote_only{border-color:var(--q);border-bottom-style:dashed}
+.s-forbidden_source{border-color:var(--bad);border-bottom-style:solid;border-bottom-width:4px}
+.s-untraceable{border-color:var(--na);border-bottom-style:dotted;border-bottom-width:3px}
 .fn{font-size:.7rem;font-weight:700;vertical-align:super;margin-left:1px;color:var(--mut)}
 .tip{display:none;position:absolute;z-index:5;left:0;top:100%;width:min(34rem,86vw);background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.6rem .8rem;font-size:.85rem;line-height:1.45;white-space:normal;box-shadow:0 4px 18px rgba(0,0,0,.25)}
 .claim:hover>.tip,.claim:focus>.tip,.claim:focus-within>.tip{display:block}
