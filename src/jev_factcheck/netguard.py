@@ -41,8 +41,20 @@ class Target:
 
 
 # Extra ranges that ipaddress.is_global may let through or that deserve an explicit reason.
-_EXTRA_BLOCKED = [ipaddress.ip_network(n) for n in ("100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "169.254.0.0/16", "fc00::/7", "fe80::/10", "fec0::/10",
-                                                    "0.0.0.0/8", "240.0.0.0/4")]
+_EXTRA_BLOCKED = [
+    ipaddress.ip_network(n)
+    for n in (
+        "100.64.0.0/10",
+        "192.0.0.0/24",
+        "198.18.0.0/15",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10",
+        "fec0::/10",
+        "0.0.0.0/8",
+        "240.0.0.0/4",
+    )
+]
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")  # well-known NAT64 prefix: the last 32 bits are an IPv4 address
 _NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")  # local-use NAT64 (RFC 8215): not checkable
 _V4_TRANSLATED = ipaddress.ip_network("::ffff:0:0:0/96")  # IPv4-translated (SIIT, RFC 2765)
@@ -59,9 +71,7 @@ def is_public_ip(value: str) -> bool:
             ip = ip.ipv4_mapped
         elif ip in _NAT64 or ip in _V4_TRANSLATED:
             ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
-        elif ip in _NAT64_LOCAL:
-            return False
-        elif ip.sixtofour is not None and not ip.sixtofour.is_global:
+        elif ip in _NAT64_LOCAL or ip.sixtofour is not None and not ip.sixtofour.is_global:
             return False
         elif ip.teredo is not None:
             return False  # tunnelled; the embedded client address is not checkable
@@ -126,7 +136,7 @@ def system_resolver(host: str, port: int) -> list[str]:
     for info in infos:
         addr = info[4][0]
         if addr not in seen:
-            seen.append(addr)
+            seen.append(str(addr))
     return seen
 
 

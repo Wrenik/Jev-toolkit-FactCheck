@@ -56,8 +56,14 @@ class ClaimsFile:
         return {
             "text": self.text,
             "claims": [
-                {"id": c.id, "claim": c.claim, "url": c.url, "quote": c.quote, "topic": c.topic,
-                 **({"span": list(c.span)} if c.span else {})}
+                {
+                    "id": c.id,
+                    "claim": c.claim,
+                    "url": c.url,
+                    "quote": c.quote,
+                    "topic": c.topic,
+                    **({"span": list(c.span)} if c.span else {}),
+                }
                 for c in self.claims
             ],
         }
@@ -99,8 +105,12 @@ def parse_claims(data: Any) -> ClaimsFile:
         seen.add(cid)
         span = item.get("span")
         if span is not None:
-            if (not isinstance(span, list) or len(span) != 2 or not all(isinstance(x, int) and not isinstance(x, bool) for x in span)
-                    or not 0 <= span[0] < span[1] <= len(text)):
+            if (
+                not isinstance(span, list)
+                or len(span) != 2
+                or not all(isinstance(x, int) and not isinstance(x, bool) for x in span)
+                or not 0 <= span[0] < span[1] <= len(text)
+            ):
                 raise SchemaError(f"{where}.span: expected [start, end] inside 'text'")
             span = (span[0], span[1])
         claims.append(
@@ -120,7 +130,7 @@ def parse_claims(data: Any) -> ClaimsFile:
             pos = text.find(c.claim)
             if pos != -1 and all(pos + len(c.claim) <= a or pos >= b for a, b in taken):
                 claims[i] = Claim(c.id, c.claim, c.url, c.quote, c.topic, (pos, pos + len(c.claim)))
-                taken.append(claims[i].span)
+                taken.append((pos, pos + len(c.claim)))
     spans = sorted(c.span for c in claims if c.span)
     for a, b in zip(spans, spans[1:]):
         if b[0] < a[1]:

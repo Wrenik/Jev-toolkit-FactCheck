@@ -73,39 +73,67 @@ class ClaimResult:
         m = self.match
         if not m or not m.found or not self.source_text or "pdf" in str(self.fetch.get("content_type", "")):
             return ""
-        return deep_link(self.claim.url, self.source_text, m.segments or [(m.start, m.end)], m.occurrences)
+        return deep_link(self.claim.url, self.source_text, m.spans, m.occurrences)
 
     def to_dict(self, with_text: bool = False) -> dict[str, Any]:
         d: dict[str, Any] = {
-            "id": self.claim.id, "claim": self.claim.claim, "url": self.claim.url, "quote": self.claim.quote,
-            "state": self.state, "reason": self.reason, "action": self.action, "explanation": self.explanation,
-            "fetch": self.fetch, "match": self.match.to_dict() if self.match else None,
-            "source_flags": self.source_flags, "source_note": self.source_note, "flags": self.flags,
+            "id": self.claim.id,
+            "claim": self.claim.claim,
+            "url": self.claim.url,
+            "quote": self.claim.quote,
+            "state": self.state,
+            "reason": self.reason,
+            "action": self.action,
+            "explanation": self.explanation,
+            "fetch": self.fetch,
+            "match": self.match.to_dict() if self.match else None,
+            "source_flags": self.source_flags,
+            "source_note": self.source_note,
+            "flags": self.flags,
             "deep_link": self.deep_link,
         }
         if self.judge:
             j = self.judge
-            d["judge"] = {"ran": j.ran, "relation": j.relation, "probabilities": j.probabilities,
-                          "p_support": j.p_support, "p_out_of_context": j.p_out_of_context, "error": j.error,
-                          "injection_reason": j.injection_reason, "model": j.model, "sent_chars": j.sent_chars}
+            d["judge"] = {
+                "ran": j.ran,
+                "relation": j.relation,
+                "probabilities": j.probabilities,
+                "p_support": j.p_support,
+                "p_out_of_context": j.p_out_of_context,
+                "error": j.error,
+                "injection_reason": j.injection_reason,
+                "model": j.model,
+                "sent_chars": j.sent_chars,
+            }
         if with_text:
             d["source_text"] = self.source_text
         return d
 
 
-def decide(claim: Claim, fetched: FetchResult, match: MatchResult | None, judge: JudgeOutcome | None, judging: bool) -> ClaimResult:
+def decide(
+    claim: Claim, fetched: FetchResult, match: MatchResult | None, judge: JudgeOutcome | None, judging: bool
+) -> ClaimResult:
     fdict = fetched.to_dict()
-    base = dict(claim=claim, fetch=fdict, match=match, judge=judge, source_text=fetched.text)
+    base: dict[str, Any] = dict(claim=claim, fetch=fdict, match=match, judge=judge, source_text=fetched.text)
     if not fetched.ok:
-        return ClaimResult(state="source_unavailable", reason=fetched.status, action="resource",
-                           explanation=f"The source could not be read ({fetched.status}: {fetched.detail}).", **base)
+        return ClaimResult(
+            state="source_unavailable",
+            reason=fetched.status,
+            action="resource",
+            explanation=f"The source could not be read ({fetched.status}: {fetched.detail}).",
+            **base,
+        )
     assert match is not None
     if match.found:
         base["flags"] = claim_flags(claim)
     if not match.found:
-        why = {
+        why: tuple[str, str, str] = {
             "altered": ("altered_quote", "requote", "The quote differs from the source in a number or a negation."),
-            "near": ("paraphrased_quote", "requote", "The source has a similar passage, but the quote is not verbatim."),
+            "near": (
+                "paraphrased_quote",
+                "requote",
+                "The source has a similar passage, but the quote is not verbatim.",
+            ),
             "stitched": ("stitched_quote", "requote", "Parts of the quote exist, but not together as quoted."),
             "not_found": ("quote_not_in_source", "requote", "The quote does not appear in the source."),
         }[match.status]
@@ -116,24 +144,46 @@ def decide(claim: Claim, fetched: FetchResult, match: MatchResult | None, judge:
             hint = " The quote starts or ends in the middle of a number."
         return ClaimResult(state="quote_not_found", reason=why[0], action=why[1], explanation=why[2] + hint, **base)
     if not judging:
-        return ClaimResult(state="quote_only", reason="not_judged", action="accept_limit",
-                           explanation="The quote exists in the source. Whether it supports the claim was not judged.", **base)
+        return ClaimResult(
+            state="quote_only",
+            reason="not_judged",
+            action="accept_limit",
+            explanation="The quote exists in the source. Whether it supports the claim was not judged.",
+            **base,
+        )
     if judge is None or not judge.ran:
-        why = "injection_like_text" if judge and judge.injection_reason else "judge_unavailable"
-        text = ("The matched passage looks like an injection attempt, so it was not sent to the judge."
-                if why == "injection_like_text" else "The judge was unavailable; only the quote match is verified.")
-        return ClaimResult(state="quote_only", reason=why, action="accept_limit", explanation=text, **base)
+        reason_key = "injection_like_text" if judge and judge.injection_reason else "judge_unavailable"
+        text = (
+            "The matched passage looks like an injection attempt, so it was not sent to the judge."
+            if reason_key == "injection_like_text"
+            else "The judge was unavailable; only the quote match is verified."
+        )
+        return ClaimResult(state="quote_only", reason=reason_key, action="accept_limit", explanation=text, **base)
     rel, p = judge.relation, judge.p_support or 0.0
     if rel == "supports" and p >= SUPPORT_MIN and (judge.p_out_of_context or 0.0) < OUT_OF_CONTEXT_MAX:
-        return ClaimResult(state="supported", reason="judge_supports", action="none",
-                           explanation=f"The quote exists and the judge rates support at {p:.0%} (a probability, not a proof).", **base)
+        return ClaimResult(
+            state="supported",
+            reason="judge_supports",
+            action="none",
+            explanation=f"The quote exists and the judge rates support at {p:.0%} (a probability, not a proof).",
+            **base,
+        )
     if rel == "supports" and (judge.p_out_of_context or 0.0) >= OUT_OF_CONTEXT_MAX:
-        return ClaimResult(state="not_supported", reason="possibly_out_of_context", action="requote",
-                           explanation="The quote exists but may mean something different in its context.", **base)
+        return ClaimResult(
+            state="not_supported",
+            reason="possibly_out_of_context",
+            action="requote",
+            explanation="The quote exists but may mean something different in its context.",
+            **base,
+        )
     table = {
         "contradicts": ("contradicted", "resource", "The quote exists, but the passage conflicts with the claim."),
         "unrelated": ("unrelated", "resource", "The quote exists, but is about something else than the claim."),
-        "not_enough": ("source_lacks_info", "retract", "The passage is on topic but does not say enough to confirm the claim."),
+        "not_enough": (
+            "source_lacks_info",
+            "retract",
+            "The passage is on topic but does not say enough to confirm the claim.",
+        ),
         "supports": ("uncertain_support", "requote", f"The judge leans towards support but only at {p:.0%}."),
     }
     reason, action, text = table[rel or "not_enough"]

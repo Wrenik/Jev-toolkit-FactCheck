@@ -21,12 +21,41 @@ from html.parser import HTMLParser
 _SKIP = {"script", "style", "noscript", "template", "svg", "iframe", "head", "object", "embed", "math", "canvas"}
 _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 _BLOCK = {
-    "p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "header", "footer", "h1", "h2", "h3",
-    "h4", "h5", "h6", "blockquote", "pre", "dd", "dt", "dl", "figure", "figcaption", "main", "aside", "nav", "form",
+    "p",
+    "div",
+    "br",
+    "li",
+    "ul",
+    "ol",
+    "tr",
+    "table",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+    "dd",
+    "dt",
+    "dl",
+    "figure",
+    "figcaption",
+    "main",
+    "aside",
+    "nav",
+    "form",
 }
 _BOILER_TAGS = {"nav", "footer"}
 _BOILER_ROLES = {"navigation", "banner", "contentinfo"}
-_HIDDEN_STYLE = re.compile(r"(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?\s*(?:;|$))", re.I)
+_HIDDEN_STYLE = re.compile(
+    r"(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?\s*(?:;|$))", re.I
+)
 
 
 @dataclass

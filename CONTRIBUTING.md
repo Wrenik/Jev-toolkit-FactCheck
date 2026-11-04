@@ -12,3 +12,5 @@ Thanks for looking. This is a small learning project, so the bar is "clear and h
 Good first contributions: a quote the matcher gets wrong (with an inert example), a page-extraction case (tables, footnotes) with a fixture, a clearer HTML report.
 
 Regenerating generated docs: `python -m jev_factcheck demo --out docs/example_report.html --title "jev_factcheck example report (invented pages, stand-in judge)"`, and `docs/CLAUDE_PROMPT.md` plus `docs/claude-skill/SKILL.md` whenever `PROMPT` in `__main__.py` changes (a test checks they are in step).
+
+Style and types: `python -m ruff format . && python -m ruff check . && python -m mypy` must pass (CI runs the same checks on Linux, Windows and macOS, Python 3.11 and 3.13). Install the tools with `pip install -e ".[dev]"`.

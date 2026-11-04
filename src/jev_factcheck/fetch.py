@@ -11,7 +11,6 @@ Network access goes through an injectable `Transport`, so tests and the evaluati
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import http.client
 import json
@@ -30,7 +29,9 @@ from . import pdftext
 from .htmltext import extract_text
 from .netguard import BlockedURL, Resolver, Target, parse_target, resolve_public, system_resolver
 
-USER_AGENT = "jev-factcheck/0.1 (learning project; checks quotes in cited pages; github.com/Wrenik/jev-toolkit)"
+USER_AGENT = (
+    "jev-factcheck/0.1 (learning project; checks quotes in cited pages; github.com/Wrenik/Jev-toolkit-FactCheck)"
+)
 ALLOWED_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 MAX_BYTES = 2_000_000
 MAX_REDIRECTS = 5
@@ -39,8 +40,13 @@ TOTAL_TIMEOUT = 20.0
 
 
 _HTTP_HINTS = {
-    401: " (login required)", 402: " (payment required: paywall?)", 403: " (forbidden: paywall or bot blocking?)",
-    404: " (page not found: wrong or invented URL?)", 410: " (page removed)", 429: " (rate limited)", 451: " (blocked for legal reasons)",
+    401: " (login required)",
+    402: " (payment required: paywall?)",
+    403: " (forbidden: paywall or bot blocking?)",
+    404: " (page not found: wrong or invented URL?)",
+    410: " (page removed)",
+    429: " (rate limited)",
+    451: " (blocked for legal reasons)",
 }
 
 
@@ -147,7 +153,8 @@ def _request(target: Target, ip: str, timeout: float, *, system_store: bool) -> 
         headers={
             "Host": host_header,
             "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9" + (",application/pdf;q=0.5" if pdftext.available() else ""),
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"
+            + (",application/pdf;q=0.5" if pdftext.available() else ""),
             "Accept-Encoding": "gzip, deflate",
             "Connection": "close",
         },
@@ -313,7 +320,7 @@ class Fetcher:
                 try:
                     resp = self.transport(target, ip, min(CONNECT_TIMEOUT, max(0.5, deadline - self._clock())))
                     break
-                except (TimeoutError, socket.timeout):
+                except TimeoutError:
                     last_error = "timeout"
                 except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
                     last_error = f"{type(exc).__name__}: {exc}"
@@ -324,29 +331,70 @@ class Fetcher:
                 if resp.status in (301, 302, 303, 307, 308):
                     loc = resp.headers.get("location", "")
                     if not loc:
-                        return FetchResult(url, False, "http_error", f"HTTP {resp.status} without Location", http_status=resp.status, redirects=chain)
+                        return FetchResult(
+                            url,
+                            False,
+                            "http_error",
+                            f"HTTP {resp.status} without Location",
+                            http_status=resp.status,
+                            redirects=chain,
+                        )
                     current = urljoin(current, loc)
                     chain.append(current)
                     continue
                 ctype_full = resp.headers.get("content-type", "").lower()
                 ctype = ctype_full.split(";")[0].strip()
                 if resp.status != 200:
-                    return FetchResult(url, False, "http_error", f"HTTP {resp.status}{_HTTP_HINTS.get(resp.status, '')}", current, resp.status, ctype, redirects=chain)
+                    return FetchResult(
+                        url,
+                        False,
+                        "http_error",
+                        f"HTTP {resp.status}{_HTTP_HINTS.get(resp.status, '')}",
+                        current,
+                        resp.status,
+                        ctype,
+                        redirects=chain,
+                    )
                 is_pdf = ctype == "application/pdf" and pdftext.available()
                 if ctype and ctype not in ALLOWED_TYPES and not is_pdf:
                     kind = "PDF" if ctype == "application/pdf" else ctype
-                    hint = ("; cite an HTML page that has the text, or install the 'pdf' extra (pip install jev-toolkit-factcheck[pdf])"
-                            if kind == "PDF" else "")
-                    return FetchResult(url, False, "unsupported_type", f"content type {kind} is not read{hint}", current, 200, ctype, redirects=chain)
+                    hint = (
+                        "; cite an HTML page that has the text, or install the 'pdf' extra (pip install jev-toolkit-factcheck[pdf])"
+                        if kind == "PDF"
+                        else ""
+                    )
+                    return FetchResult(
+                        url,
+                        False,
+                        "unsupported_type",
+                        f"content type {kind} is not read{hint}",
+                        current,
+                        200,
+                        ctype,
+                        redirects=chain,
+                    )
                 declared = resp.headers.get("content-length", "")
                 if declared.isdigit() and int(declared) > self.max_bytes * 2:
-                    return FetchResult(url, False, "too_large", f"Content-Length {declared}", current, 200, ctype, redirects=chain)
+                    return FetchResult(
+                        url, False, "too_large", f"Content-Length {declared}", current, 200, ctype, redirects=chain
+                    )
                 try:
                     body, why = _read_body(resp, self.max_bytes)
-                except (TimeoutError, socket.timeout):
-                    return FetchResult(url, False, "timeout", "while reading the body", current, 200, ctype, redirects=chain)
+                except TimeoutError:
+                    return FetchResult(
+                        url, False, "timeout", "while reading the body", current, 200, ctype, redirects=chain
+                    )
                 except (OSError, http.client.HTTPException) as exc:
-                    return FetchResult(url, False, "network_error", f"{type(exc).__name__}: {exc}", current, 200, ctype, redirects=chain)
+                    return FetchResult(
+                        url,
+                        False,
+                        "network_error",
+                        f"{type(exc).__name__}: {exc}",
+                        current,
+                        200,
+                        ctype,
+                        redirects=chain,
+                    )
                 if body is None:
                     return FetchResult(url, False, "too_large", why, current, 200, ctype, redirects=chain)
             finally:
@@ -355,16 +403,37 @@ class Fetcher:
                 try:
                     page = pdftext.extract_pdf(body)
                 except ValueError as exc:
-                    return FetchResult(url, False, "unsupported_type", f"PDF not read: {exc}", current, 200, ctype, redirects=chain)
+                    return FetchResult(
+                        url, False, "unsupported_type", f"PDF not read: {exc}", current, 200, ctype, redirects=chain
+                    )
             else:
                 page = extract_text(_decode(body, ctype_full), ctype or "text/html")
             if not page.text.strip():
                 return FetchResult(
-                    url, False, "empty", "no readable text (script-rendered, scanned PDF without a text layer, or empty page?)", current, 200, ctype,
-                    dropped_hidden_chars=page.dropped_chars, redirects=chain,
+                    url,
+                    False,
+                    "empty",
+                    "no readable text (script-rendered, scanned PDF without a text layer, or empty page?)",
+                    current,
+                    200,
+                    ctype,
+                    dropped_hidden_chars=page.dropped_chars,
+                    redirects=chain,
                 )
-            return FetchResult(url, True, "ok", "", current, 200, ctype, page.text, page.title, page.dropped_chars,
-                               page.boilerplate_chars, redirects=chain)
+            return FetchResult(
+                url,
+                True,
+                "ok",
+                "",
+                current,
+                200,
+                ctype,
+                page.text,
+                page.title,
+                page.dropped_chars,
+                page.boilerplate_chars,
+                redirects=chain,
+            )
         return FetchResult(url, False, "too_many_redirects", f"more than {MAX_REDIRECTS}", redirects=chain)
 
 
@@ -385,7 +454,9 @@ class FixtureFetcher:
             entry = {"file": entry}
         status = entry.get("status", "ok")
         if status != "ok":  # fixtures can simulate failures: paywall, timeout, pdf ...
-            return FetchResult(url, False, status, entry.get("detail", "simulated"), http_status=entry.get("http_status"))
+            return FetchResult(
+                url, False, status, entry.get("detail", "simulated"), http_status=entry.get("http_status")
+            )
         path = (self.root / entry["file"]).resolve()
         if self.root.resolve() not in path.parents:
             return FetchResult(url, False, "blocked", "fixture path escapes the fixture folder")
@@ -393,5 +464,7 @@ class FixtureFetcher:
         ctype = entry.get("content_type", "text/html")
         page = extract_text(raw, ctype)
         if not page.text.strip():
-            return FetchResult(url, False, "empty", "no readable text", url, 200, ctype, dropped_hidden_chars=page.dropped_chars)
+            return FetchResult(
+                url, False, "empty", "no readable text", url, 200, ctype, dropped_hidden_chars=page.dropped_chars
+            )
         return FetchResult(url, True, "ok", "", url, 200, ctype, page.text, page.title, page.dropped_chars)

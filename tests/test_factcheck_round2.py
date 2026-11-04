@@ -8,7 +8,7 @@ from jev_factcheck import fragment, match, pdftext
 from jev_factcheck.fetch import Fetcher, _dial_order
 from jev_factcheck.htmltext import extract_text
 from jev_factcheck.match import match_quote
-from test_factcheck_fetch import H, PUB, FakeResp, Net
+from test_factcheck_fetch import PUB, FakeResp, H, Net
 
 
 # ---- text fragments ---------------------------------------------------------------------------
@@ -58,8 +58,10 @@ def test_markers_never_make_a_different_index_match():
 
 
 def test_nav_and_footer_dropped_but_aside_and_article_kept():
-    html = ("<body><nav>Main menu Random article</nav><main><p>Real article text.</p><aside>Side note kept.</aside></main>"
-            '<div role="contentinfo">Privacy policy</div><footer>Copyright</footer></body>')
+    html = (
+        "<body><nav>Main menu Random article</nav><main><p>Real article text.</p><aside>Side note kept.</aside></main>"
+        '<div role="contentinfo">Privacy policy</div><footer>Copyright</footer></body>'
+    )
     p = extract_text(html)
     assert "Real article text." in p.text and "Side note kept." in p.text
     assert "Main menu" not in p.text and "Privacy" not in p.text and "Copyright" not in p.text
@@ -68,7 +70,12 @@ def test_nav_and_footer_dropped_but_aside_and_article_kept():
 
 # ---- dialing ----------------------------------------------------------------------------------
 def test_dial_order_puts_ipv4_first_and_alternates():
-    assert _dial_order(["2001:db8::1", "2001:db8::2", "1.1.1.1", "2.2.2.2"]) == ["1.1.1.1", "2001:db8::1", "2.2.2.2", "2001:db8::2"]
+    assert _dial_order(["2001:db8::1", "2001:db8::2", "1.1.1.1", "2.2.2.2"]) == [
+        "1.1.1.1",
+        "2001:db8::1",
+        "2.2.2.2",
+        "2001:db8::2",
+    ]
 
 
 def test_dead_ipv6_does_not_block_the_working_ipv4():
@@ -80,7 +87,9 @@ def test_dead_ipv6_does_not_block_the_working_ipv4():
             raise TimeoutError()
         return FakeResp(headers=H, body=b"<p>hello there world</p>")
 
-    f = Fetcher(transport=transport, resolver=lambda h, p: ["2606:4700::1", "2606:4700::2", "104.20.23.154"], per_host_delay=0)
+    f = Fetcher(
+        transport=transport, resolver=lambda h, p: ["2606:4700::1", "2606:4700::2", "104.20.23.154"], per_host_delay=0
+    )
     assert f.fetch("http://a.test/").ok and tried == ["104.20.23.154"]
 
 
@@ -96,17 +105,22 @@ def test_similar_passage_search_is_skipped_on_huge_pages_but_exact_still_works(m
 def test_worst_case_repetitive_large_page_is_fast():
     doc = "The committee met on Tuesday and reviewed the budget for the coming year in some detail. " * 20000
     t = time.perf_counter()
-    r = match_quote(doc, "The committee decided on Tuesday to cancel the entire budget for the coming year immediately.")
+    r = match_quote(
+        doc, "The committee decided on Tuesday to cancel the entire budget for the coming year immediately."
+    )
     assert r.status == "not_found" and time.perf_counter() - t < 8  # about 1 s here; generous for slow CI
 
 
 # ---- PDF --------------------------------------------------------------------------------------
 def _tiny_pdf(text: str) -> bytes:
     stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
-    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-            b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
     out, offs = bytearray(b"%PDF-1.4\n"), []
     for i, o in enumerate(objs, 1):
         offs.append(len(out))
@@ -125,8 +139,11 @@ PDF = {"Content-Type": "application/pdf"}
 def test_pdf_text_is_extracted_when_pypdf_is_present():
     if not pdftext.available():
         return
-    f = Fetcher(transport=Net({"http://a.test/d.pdf": FakeResp(headers=PDF, body=_tiny_pdf("The dose is 5 mg daily"))}),
-                resolver=PUB, per_host_delay=0)
+    f = Fetcher(
+        transport=Net({"http://a.test/d.pdf": FakeResp(headers=PDF, body=_tiny_pdf("The dose is 5 mg daily"))}),
+        resolver=PUB,
+        per_host_delay=0,
+    )
     r = f.fetch("http://a.test/d.pdf")
     assert r.ok and "The dose is 5 mg daily" in r.text
     assert match_quote(r.text, "The dose is 5 mg daily").status == "exact"
@@ -135,7 +152,11 @@ def test_pdf_text_is_extracted_when_pypdf_is_present():
 def test_garbage_pdf_is_a_clear_failure_not_a_crash():
     if not pdftext.available():
         return
-    f = Fetcher(transport=Net({"http://a.test/d.pdf": FakeResp(headers=PDF, body=b"%PDF-1.7 junk")}), resolver=PUB, per_host_delay=0)
+    f = Fetcher(
+        transport=Net({"http://a.test/d.pdf": FakeResp(headers=PDF, body=b"%PDF-1.7 junk")}),
+        resolver=PUB,
+        per_host_delay=0,
+    )
     r = f.fetch("http://a.test/d.pdf")
     assert not r.ok and r.status == "unsupported_type" and "PDF not read" in r.detail
 

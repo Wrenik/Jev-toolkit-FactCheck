@@ -1,8 +1,10 @@
 """Injection guard for passages going to the judge, and port/IDNA restrictions. Offline."""
 
-import pytest
+import contextlib
 
+import pytest
 from jev_core import FakeJudge
+
 from jev_factcheck.checker import check_claims
 from jev_factcheck.fetch import FetchResult
 from jev_factcheck.guard import fact_injection_reason
@@ -49,14 +51,34 @@ def test_exact_string_never_reaches_judge():
         def fetch(self, url):
             return FetchResult(url, True, "ok", text=page)
 
-    cf = parse_claims({"text": "", "claims": [{"id": "a", "claim": "Bridge opened 1932.", "url": "https://x.test/", "quote": "The bridge opened in 1932."}]})
+    cf = parse_claims(
+        {
+            "text": "",
+            "claims": [
+                {
+                    "id": "a",
+                    "claim": "Bridge opened 1932.",
+                    "url": "https://x.test/",
+                    "quote": "The bridge opened in 1932.",
+                }
+            ],
+        }
+    )
     j = FakeJudge()
     r = check_claims(cf, P(), j, injection_check=default_injection_check())[0]
     assert j.calls == [] and r.state == "quote_only" and r.reason == "injection_like_text"
 
 
-@pytest.mark.parametrize("url", ["http://example.com:22/", "http://example.com:25/", "http://example.com:6379/",
-                                 "https://example.com:9200/", "http://example.com:8080/"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com:22/",
+        "http://example.com:25/",
+        "http://example.com:6379/",
+        "https://example.com:9200/",
+        "http://example.com:8080/",
+    ],
+)
 def test_odd_ports_blocked(url):
     with pytest.raises(BlockedURL) as e:
         parse_target(url)
@@ -68,7 +90,5 @@ def test_standard_ports_and_idna():
     assert parse_target("https://example.com:443/x").port == 443
     assert parse_target("https://bücher.example/").host == "xn--bcher-kva.example"
     for bad in ("http://a..b/", "http://-.example" + "x" * 70 + ".com./"):
-        try:
+        with contextlib.suppress(BlockedURL):
             parse_target(bad)
-        except BlockedURL:
-            pass

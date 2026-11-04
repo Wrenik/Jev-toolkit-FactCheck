@@ -36,16 +36,37 @@ def test_prompt_docs_are_in_step_with_the_cli_prompt():
 
 def test_committed_example_report_is_current_and_self_contained():
     html = (ROOT / "docs/example_report.html").read_text(encoding="utf-8")
-    assert "Content-Security-Policy" in html and "<script" not in html.lower() and "http://" not in html.replace("http://fixture", "")
+    assert (
+        "Content-Security-Policy" in html
+        and "<script" not in html.lower()
+        and "http://" not in html.replace("http://fixture", "")
+    )
     assert chr(92) + "Users" + chr(92) not in html and "/home/" not in html
 
 
 def test_examples_run_offline_and_catch_the_planted_misquote(tmp_path, capsys):
-    code = main(["check", str(ROOT / "examples/claims.json"), "--fixtures", str(ROOT / "examples/fixtures"), "--no-judge",
-                 "--out", str(tmp_path / "r.html"), "--json", str(tmp_path / "r.json"), "--corrections", str(tmp_path / "c.json")])
+    code = main(
+        [
+            "check",
+            str(ROOT / "examples/claims.json"),
+            "--fixtures",
+            str(ROOT / "examples/fixtures"),
+            "--no-judge",
+            "--out",
+            str(tmp_path / "r.html"),
+            "--json",
+            str(tmp_path / "r.json"),
+            "--corrections",
+            str(tmp_path / "c.json"),
+        ]
+    )
     assert code == 1
     res = {r["id"]: r for r in json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))}
-    assert res["c1"]["state"] == "quote_only" and res["c2"]["state"] == "quote_not_found" and res["c2"]["reason"] == "altered_quote"
+    assert (
+        res["c1"]["state"] == "quote_only"
+        and res["c2"]["state"] == "quote_not_found"
+        and res["c2"]["reason"] == "altered_quote"
+    )
     assert (tmp_path / "c.json").is_file()
 
 

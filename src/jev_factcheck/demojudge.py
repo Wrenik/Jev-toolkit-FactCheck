@@ -9,11 +9,45 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from typing import Any
 
 from jev_core import Pick, PickAnswer, Question, Verdict, YesNo, YesNoAnswer
 
 _WORD = re.compile(r"[a-z0-9][a-z0-9,.%-]*[a-z0-9%]|[a-z0-9]", re.I)
-_STOP = set("the a an of in on at to is are was were be been it its and or for with by as that this from has have had will would".split())
+_STOP = set(
+    [
+        "the",
+        "a",
+        "an",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "it",
+        "its",
+        "and",
+        "or",
+        "for",
+        "with",
+        "by",
+        "as",
+        "that",
+        "this",
+        "from",
+        "has",
+        "have",
+        "had",
+        "will",
+        "would",
+    ]
+)
 _NEG = {"not", "no", "never", "none", "cannot", "unchanged", "abolished", "without", "impossible"}
 
 
@@ -39,7 +73,7 @@ class DemoJudge:
             rel = "unrelated"
         probs = {k: 0.05 for k in ("supports", "contradicts", "unrelated", "not_enough")}
         probs[rel] = 0.85
-        answers = {}
+        answers: dict[str, Any] = {}
         for name, q in questions.items():
             if isinstance(q, Pick):
                 answers[name] = PickAnswer(rel, 0.85, probs)

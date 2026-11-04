@@ -99,7 +99,7 @@ def test_multiple_occurrences_counted():
 
 def test_normalise_offsets_roundtrip():
     n = normalise("A  B’s  “C”")
-    assert n.text == "a b's \"c\""
+    assert n.text == 'a b\'s "c"'
     assert len(n.starts) == len(n.text)
 
 
@@ -109,7 +109,10 @@ def test_wide_gap_flag():
     assert r.status == "elided" and "wide_gap" in r.flags
 
 
-GOOD = {"text": "Hello world.", "claims": [{"id": "a", "claim": "x", "url": "https://e.org", "quote": "q", "span": [0, 5]}]}
+GOOD = {
+    "text": "Hello world.",
+    "claims": [{"id": "a", "claim": "x", "url": "https://e.org", "quote": "q", "span": [0, 5]}],
+}
 
 
 def test_schema_ok_and_bounds():
@@ -120,9 +123,13 @@ def test_schema_ok_and_bounds():
         {"text": "x", "claims": [{"id": "a", "claim": "", "url": "u", "quote": "q"}]},
         {"text": "x", "claims": [{"id": "a b", "claim": "c", "url": "u", "quote": "q"}]},
         {"text": "x", "claims": [{"id": "a", "claim": "c", "url": "u", "quote": "q", "span": [0, 99]}]},
-        {"text": "x" * 10, "claims": [
-            {"id": "a", "claim": "c", "url": "u", "quote": "q", "span": [0, 6]},
-            {"id": "b", "claim": "c", "url": "u", "quote": "q", "span": [4, 8]}]},
+        {
+            "text": "x" * 10,
+            "claims": [
+                {"id": "a", "claim": "c", "url": "u", "quote": "q", "span": [0, 6]},
+                {"id": "b", "claim": "c", "url": "u", "quote": "q", "span": [4, 8]},
+            ],
+        },
         {"text": "x", "claims": [{"id": "a", "claim": "c" * 700, "url": "u", "quote": "q"}]},
         [],
     ):

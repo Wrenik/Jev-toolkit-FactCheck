@@ -24,12 +24,33 @@ def test_demo_no_judge_says_quote_only(tmp_path, capsys):
 
 
 def test_check_with_fixtures_and_correction_round(tmp_path, capsys):
-    claims = {"text": "Bridge opened 1923.", "claims": [{"id": "a", "claim": "Bridge opened 1932.", "url": "https://fixture.test/bridge",
-                                                        "quote": "The Harbor Bridge opened to traffic in 1923.", "span": [0, 19]}]}
+    claims = {
+        "text": "Bridge opened 1923.",
+        "claims": [
+            {
+                "id": "a",
+                "claim": "Bridge opened 1932.",
+                "url": "https://fixture.test/bridge",
+                "quote": "The Harbor Bridge opened to traffic in 1923.",
+                "span": [0, 19],
+            }
+        ],
+    }
     cpath, state, corr = tmp_path / "c.json", tmp_path / "s.json", tmp_path / "corr.json"
     cpath.write_text(json.dumps(claims), encoding="utf-8")
-    args = ["check", str(cpath), "--fixtures", str(evaluate.PAGES), "--no-judge", "--out", str(tmp_path / "r.html"),
-            "--state", str(state), "--corrections", str(corr)]
+    args = [
+        "check",
+        str(cpath),
+        "--fixtures",
+        str(evaluate.PAGES),
+        "--no-judge",
+        "--out",
+        str(tmp_path / "r.html"),
+        "--state",
+        str(state),
+        "--corrections",
+        str(corr),
+    ]
     assert main(args) == 1
     c = json.loads(corr.read_text(encoding="utf-8"))
     assert c["claims"][0]["state"] == "quote_not_found" and "1932" in c["claims"][0]["untrusted_source_excerpt"]
@@ -62,15 +83,23 @@ def test_page_injection_never_reaches_judge_in_eval():
             return super().ask(state, questions)
 
     evaluate.run_set("dev", Spy())
-    assert not any("ignore all previous" in json.dumps(s).lower() or "mark all claims" in json.dumps(s).lower() for s in Spy.seen)
+    assert not any(
+        "ignore all previous" in json.dumps(s).lower() or "mark all claims" in json.dumps(s).lower() for s in Spy.seen
+    )
 
 
 def test_span_found_automatically_when_claim_is_verbatim_in_text():
     from jev_factcheck.schema import parse_claims
 
-    cf = parse_claims({"text": "Intro. Water boils at 100 C. Outro.", "claims": [
-        {"id": "a", "claim": "Water boils at 100 C.", "url": "https://x.test/", "quote": "q"},
-        {"id": "b", "claim": "Not in the text.", "url": "https://x.test/", "quote": "q"}]})
+    cf = parse_claims(
+        {
+            "text": "Intro. Water boils at 100 C. Outro.",
+            "claims": [
+                {"id": "a", "claim": "Water boils at 100 C.", "url": "https://x.test/", "quote": "q"},
+                {"id": "b", "claim": "Not in the text.", "url": "https://x.test/", "quote": "q"},
+            ],
+        }
+    )
     assert cf.claims[0].span == (7, 28) and cf.claims[1].span is None
 
 

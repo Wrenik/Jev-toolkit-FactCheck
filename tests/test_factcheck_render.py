@@ -3,12 +3,13 @@
 import re
 
 from jev_core import FakeJudge, PickAnswer, YesNoAnswer
+
 from jev_factcheck.checker import check_claims
 from jev_factcheck.fetch import FetchResult
 from jev_factcheck.render import render_html
 from jev_factcheck.schema import parse_claims
 
-XSS = '<script>alert(1)</script><img src=x onerror=alert(2)>"\'&'
+XSS = "<script>alert(1)</script><img src=x onerror=alert(2)>\"'&"
 PAGE = "Water boils at 100 degrees Celsius at sea level. " + XSS + " Ice melts at 0 degrees."
 
 
@@ -21,17 +22,46 @@ class Pages:
 
 def judge():
     def r(state, q):
-        return {"relation": PickAnswer("supports", 0.9, {"supports": 0.9, "contradicts": 0.04, "unrelated": 0.03, "not_enough": 0.03}),
-                "out_of_context": YesNoAnswer(0.05)}
+        return {
+            "relation": PickAnswer(
+                "supports", 0.9, {"supports": 0.9, "contradicts": 0.04, "unrelated": 0.03, "not_enough": 0.03}
+            ),
+            "out_of_context": YesNoAnswer(0.05),
+        }
+
     return FakeJudge(r)
 
 
 def build(text=None):
     text = text or "Water boils at 100 C. Ice melts at 0 C. Something unsourced. " + XSS
-    cf = parse_claims({"text": text, "claims": [
-        {"id": "a", "claim": "Water boils at 100 C." + XSS, "url": "https://ok.test/a?x=<b>", "quote": "Water boils at 100 degrees Celsius at sea level.", "span": [0, 21]},
-        {"id": "b", "claim": "Ice melts at 0 C.", "url": "https://paywall.test/", "quote": "q" * 30, "span": [22, 39]},
-        {"id": "c", "claim": "No span here", "url": "https://ok.test/a", "quote": "invented sentence not on the page at all", "topic": "t"}]})
+    cf = parse_claims(
+        {
+            "text": text,
+            "claims": [
+                {
+                    "id": "a",
+                    "claim": "Water boils at 100 C." + XSS,
+                    "url": "https://ok.test/a?x=<b>",
+                    "quote": "Water boils at 100 degrees Celsius at sea level.",
+                    "span": [0, 21],
+                },
+                {
+                    "id": "b",
+                    "claim": "Ice melts at 0 C.",
+                    "url": "https://paywall.test/",
+                    "quote": "q" * 30,
+                    "span": [22, 39],
+                },
+                {
+                    "id": "c",
+                    "claim": "No span here",
+                    "url": "https://ok.test/a",
+                    "quote": "invented sentence not on the page at all",
+                    "topic": "t",
+                },
+            ],
+        }
+    )
     return text, check_claims(cf, Pages(), judge())
 
 
@@ -42,8 +72,10 @@ def test_html_is_safe_and_self_contained():
     assert "<script" not in out.lower().replace("&lt;script", "")
     assert "<img" not in out and "onerror=" not in re.sub(r"&lt;[^>]*", "", out)
     assert "&lt;script&gt;" in out
-    assert not re.search(r'<[^>]*\s(src|action)\s*=', out)
-    hrefs = re.findall(r'<a [^>]*href="([^"]*)"[^>]*>', out)  # only the per-claim deep links, http(s) with a text fragment
+    assert not re.search(r"<[^>]*\s(src|action)\s*=", out)
+    hrefs = re.findall(
+        r'<a [^>]*href="([^"]*)"[^>]*>', out
+    )  # only the per-claim deep links, http(s) with a text fragment
     assert hrefs and all(h.startswith("https://") and "#:~:text=" in h for h in hrefs)
     assert all('rel="noopener noreferrer nofollow"' in a for a in re.findall(r"<a [^>]*>", out))
     assert not re.search(r"url\(|@import", out)

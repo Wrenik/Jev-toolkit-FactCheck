@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from jev_core import Judge, JudgeError, Pick, YesNo
+from jev_core import Judge, JudgeError, Pick, PickAnswer, Rate, YesNo, YesNoAnswer
 
 from .match import MatchResult
 
@@ -86,7 +86,7 @@ def passage_for(original: str, m: MatchResult) -> str:
     """The matched passage(s) plus a little context, bounded. Only this text may be sent."""
     if not m.segments:
         return ""
-    spans = m.segments if m.status in ("elided", "stitched") else [(m.start, m.end)]
+    spans = m.segments if m.status in ("elided", "stitched") else m.spans
     chunks = []
     for s, e in spans:
         chunks.append(original[max(0, s - CONTEXT_CHARS) : min(len(original), e + CONTEXT_CHARS)])
@@ -107,7 +107,7 @@ def judge_support(
         "quote": clean(quote, MAX_QUOTE),
         "passage": clean(passage, MAX_PASSAGE),
     }
-    questions = {
+    questions: dict[str, YesNo | Pick | Rate] = {
         "relation": Pick("How does the passage relate to the claim? Judge only what the passage says.", RELATIONS),
         "out_of_context": YesNo(
             "Does the quote, read within the passage, mean something different from what the claim says "
@@ -120,6 +120,7 @@ def judge_support(
         return JudgeOutcome(ran=False, error=f"{type(exc).__name__}: {exc}")
     rel = verdict["relation"]
     ooc = verdict["out_of_context"]
+    assert isinstance(rel, PickAnswer) and isinstance(ooc, YesNoAnswer)
     probs = {k: float(v) for k, v in rel.probabilities.items()}
     return JudgeOutcome(
         ran=True,

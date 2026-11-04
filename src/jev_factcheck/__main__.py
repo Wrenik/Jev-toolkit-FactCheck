@@ -55,10 +55,14 @@ def _judge(args):
         from jev_core import default_judge
 
         judge = default_judge(VAR, tag="factcheck", timeout=15, max_retries=0)
-        print(f"Judge: {judge.name} ({judge.model}). Sent per claim: claim, quote and a bounded, redacted window around the matched passage.")
+        print(
+            f"Judge: {judge.name} ({judge.model}). Sent per claim: claim, quote and a bounded, redacted window around the matched passage."
+        )
         return judge
     except JudgeConfigError as exc:
-        print(f"Judge unavailable ({exc}). Falling back to quote-match only; use --demo-judge for the offline heuristic.")
+        print(
+            f"Judge unavailable ({exc}). Falling back to quote-match only; use --demo-judge for the offline heuristic."
+        )
         return None
 
 
@@ -69,8 +73,11 @@ def _write(path: str, data: str) -> None:
 
 
 def _report(cf, results, judge, args, rounds=None) -> int:
-    note = ("Quote-match only: support was not judged." if judge is None else
-            f"Support is a probability from the judge ({getattr(judge, 'model', '?')}), not a proof.")
+    note = (
+        "Quote-match only: support was not judged."
+        if judge is None
+        else f"Support is a probability from the judge ({getattr(judge, 'model', '?')}), not a proof."
+    )
     _write(args.out, render_html(cf.text, results, title=args.title, rounds=rounds, judge_note=note))
     if getattr(args, "json", None):
         _write(args.json, json.dumps([r.to_dict() for r in results], indent=1, ensure_ascii=False))
@@ -87,14 +94,30 @@ def cmd_demo(args) -> int:
         c = labelled[cid]
         start = len(text)
         text += c["claim"]
-        claims.append({"id": cid, "claim": c["claim"], "url": c["url"], "quote": c["quote"], "span": [start, len(text)],
-                       "topic": "general"})
+        claims.append(
+            {
+                "id": cid,
+                "claim": c["claim"],
+                "url": c["url"],
+                "quote": c["quote"],
+                "span": [start, len(text)],
+                "topic": "general",
+            }
+        )
         text += " "
     cf = parse_claims({"text": text.strip(), "claims": claims})
     judge = None if args.no_judge else DemoJudge()
-    print("Demo: invented fixture pages, no network." + (" Judge: demo word-overlap heuristic (not Jev)." if judge else " Judge: off."))
-    results = check_claims(cf, FixtureFetcher(evaluate.PAGES), judge, injection_check=default_injection_check(),
-                           source_check=load_sources().check)
+    print(
+        "Demo: invented fixture pages, no network."
+        + (" Judge: demo word-overlap heuristic (not Jev)." if judge else " Judge: off.")
+    )
+    results = check_claims(
+        cf,
+        FixtureFetcher(evaluate.PAGES),
+        judge,
+        injection_check=default_injection_check(),
+        source_check=load_sources().check,
+    )
     return _report(cf, results, judge, args)
 
 
@@ -113,7 +136,9 @@ def cmd_check(args) -> int:
     code = _report(cf, results, judge, args, rounds=state.log)
     if not finished:
         _write(args.corrections, json.dumps(corrections, indent=1, ensure_ascii=False))
-        print(f"Round {state.round} of {state.max_rounds}: {len(corrections['claims'])} claims need a fix -> {args.corrections}")
+        print(
+            f"Round {state.round} of {state.max_rounds}: {len(corrections['claims'])} claims need a fix -> {args.corrections}"
+        )
     else:
         stopped = {k: v for k, v in state.stopped.items()}
         print("Loop finished." + (f" Stopped without support: {stopped}" if stopped else ""))
@@ -125,7 +150,9 @@ def cmd_validate(args) -> int:
     no_span = [c.id for c in cf.claims if c.span is None]
     print(f"OK: {len(cf.claims)} claims, {len(cf.text)} characters of text.")
     if no_span:
-        print(f"Not marked in the text (no span, claim sentence not found verbatim in 'text'): {', '.join(no_span)}. They still appear in the evidence list.")
+        print(
+            f"Not marked in the text (no span, claim sentence not found verbatim in 'text'): {', '.join(no_span)}. They still appear in the evidence list."
+        )
     return 0
 
 
@@ -137,13 +164,17 @@ def cmd_schema(args) -> int:
 
 
 def cmd_eval(args) -> int:
-    judge = DemoJudge() if not args.live else __import__("jev_core").default_judge(VAR, tag="factcheck-eval", timeout=20, max_retries=0)
+    judge = (
+        DemoJudge()
+        if not args.live
+        else __import__("jev_core").default_judge(VAR, tag="factcheck-eval", timeout=20, max_retries=0)
+    )
     name = "word-overlap baseline" if not args.live else f"{judge.name}/{judge.model}"
     if args.judge:
         print(f"judge={name}")
         print(evaluate.run_tricky(judge))
         return 0
-    for s in (["dev", "heldout"] if args.set == "all" else [args.set]):
+    for s in ["dev", "heldout"] if args.set == "all" else [args.set]:
         try:
             print(evaluate.format_report(evaluate.run_set(s, judge), name))
         except FileNotFoundError:
@@ -164,7 +195,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("claims")
     c.add_argument("--out", default=str(VAR / "factcheck-report.html"))
     c.add_argument("--title", default="Fact check")
-    c.add_argument("--json", help="also write the full per-claim results (match offsets, judge probabilities, page hash) here")
+    c.add_argument(
+        "--json", help="also write the full per-claim results (match offsets, judge probabilities, page hash) here"
+    )
     c.add_argument("--no-judge", action="store_true", help="quote matching only; nothing is sent to any judge")
     c.add_argument("--demo-judge", action="store_true", help="offline word-overlap heuristic instead of Jev")
     c.add_argument("--fixtures", help="folder with urls.json: read pages from files instead of the network")
@@ -177,7 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("schema", help="print the JSON Schema of claims.json")
     e = sub.add_parser("eval", help="evaluate against the hand-labelled sets")
     e.add_argument("--set", choices=["dev", "heldout", "all"], default="all")
-    e.add_argument("--judge", action="store_true", help="only the inline judge-only 'tricky' pairs (add --live for Jev)")
+    e.add_argument(
+        "--judge", action="store_true", help="only the inline judge-only 'tricky' pairs (add --live for Jev)"
+    )
     e.add_argument("--live", action="store_true", help="use Jev (needs TYPESAFE_API_KEY; costs a fraction of a cent)")
     sub.add_parser("prompt", help="print the claim-extraction prompt for Claude Code")
     args = ap.parse_args(argv)
@@ -185,7 +220,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "prompt":
             print(PROMPT)
             return 0
-        return {"demo": cmd_demo, "check": cmd_check, "eval": cmd_eval, "validate": cmd_validate, "schema": cmd_schema}[args.cmd](args)
+        return {"demo": cmd_demo, "check": cmd_check, "eval": cmd_eval, "validate": cmd_validate, "schema": cmd_schema}[
+            args.cmd
+        ](args)
     except (SchemaError, SourceListError, OSError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

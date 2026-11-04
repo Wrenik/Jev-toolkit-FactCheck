@@ -50,9 +50,51 @@ _QUOTES = {
 _INVISIBLE = set("­​‌‍⁠﻿‎‏‪‫‬‭‮⁦⁧⁨⁩")
 _NEGATIONS = {"not", "no", "never", "none", "neither", "nor", "cannot", "without", "n't", "nothing", "nobody", "hardly"}
 _NUMBER_WORDS = set(
-    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen "
-    "nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand million billion trillion half double triple "
-    "first second third fourth fifth majority minority".split()
+    [
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety",
+        "hundred",
+        "thousand",
+        "million",
+        "billion",
+        "trillion",
+        "half",
+        "double",
+        "triple",
+        "first",
+        "second",
+        "third",
+        "fourth",
+        "fifth",
+        "majority",
+        "minority",
+    ]
 )
 # printable ASCII except '-' (and except runs of spaces): normalisation of these is just lower-casing
 _PLAIN_RUN = re.compile(r"[!-,.-~](?:[!-,.-~]| (?=[!-,.-~]))*")
@@ -149,6 +191,13 @@ class MatchResult:
     def found(self) -> bool:
         return self.status in FOUND_STATUSES
 
+    @property
+    def spans(self) -> list[tuple[int, int]]:
+        """The matched character ranges: the segments, or the single start..end range."""
+        if self.segments:
+            return self.segments
+        return [(self.start, self.end)] if self.start is not None and self.end is not None else []
+
     def matched_text(self, original: str) -> str:
         if self.start is None or self.end is None:
             return ""
@@ -203,11 +252,11 @@ def _cuts_number(original: str, s: int, e: int) -> bool:
     """The match starts or ends inside a number ("grew 15" matching "grew 150")."""
     if s > 0 and original[s].isdigit() and original[s - 1].isdigit():
         return True
-    if e < len(original) and original[e - 1].isdigit() and (
-        original[e].isdigit() or (original[e] in ".," and e + 1 < len(original) and original[e + 1].isdigit())
-    ):
-        return True
-    return False
+    return (
+        e < len(original)
+        and original[e - 1].isdigit()
+        and (original[e].isdigit() or (original[e] in ".," and e + 1 < len(original) and original[e + 1].isdigit()))
+    )
 
 
 _BEFORE = re.compile(r"[\w'’-]+")
@@ -225,7 +274,7 @@ def _negated_before(original: str, s: int, quote_start: str) -> bool:
 
 def _audit(r: MatchResult, original: str, q: str) -> MatchResult:
     """Boundary checks on a found quote: cutting a number turns it into 'altered'; a negation just before is flagged."""
-    spans = r.segments or [(r.start, r.end)]
+    spans = r.spans
     if any(_cuts_number(original, a, b) for a, b in spans):
         r.status, r.similarity = "altered", None
         r.flags = r.flags + ["cuts_number"]
@@ -258,7 +307,9 @@ def _match_quote(original: str, quote: str) -> MatchResult:
     # 1. Verbatim.
     hits = _find_all(original, q)
     if hits:
-        return MatchResult("exact", hits[0], hits[0] + len(q), [(hits[0], hits[0] + len(q))], len(hits), 1.0, flags=flags)
+        return MatchResult(
+            "exact", hits[0], hits[0] + len(q), [(hits[0], hits[0] + len(q))], len(hits), 1.0, flags=flags
+        )
 
     norm = normalise(original)
     nq = normalise(q).text.strip()
@@ -276,7 +327,9 @@ def _match_quote(original: str, quote: str) -> MatchResult:
         hits = _find_all(nm.text, nq)
         if hits:
             s, e = _span(nm, hits[0], hits[0] + len(nq))
-            return MatchResult("normalised", s, e, [(s, e)], len(hits), 1.0, flags=flags + ["reference_markers_ignored"])
+            return MatchResult(
+                "normalised", s, e, [(s, e)], len(hits), 1.0, flags=flags + ["reference_markers_ignored"]
+            )
 
     # 3. Ellipsis: every piece, in order.
     pieces = [p for p in _ELLIPSIS.split(q) if p.strip()]
@@ -293,8 +346,11 @@ def _match_quote(original: str, quote: str) -> MatchResult:
 
     # 5. Near match with a diff of numbers and negations.
     if len(norm.text) > NEAR_MAX_CHARS:
-        return MatchResult("not_found", flags=flags + ["near_search_skipped"],
-                           note="no exact passage; the page is too large for the similar-passage search")
+        return MatchResult(
+            "not_found",
+            flags=flags + ["near_search_skipped"],
+            note="no exact passage; the page is too large for the similar-passage search",
+        )
     near = _near(norm, nq)
     if near is not None:
         near.flags = flags + near.flags
@@ -433,12 +489,7 @@ def _near(norm: Normalised, nq: str) -> MatchResult | None:
     s = dt[first_doc][1]
     e = dt[last_doc][2]
     s_o, e_o = _span(norm, s, e)
-    critical = any(
-        _is_critical(tok)
-        for d in diffs
-        for side in ("quote", "source")
-        for tok in d[side].split()
-    )
+    critical = any(_is_critical(tok) for d in diffs for side in ("quote", "source") for tok in d[side].split())
     status = "altered" if critical else "near"
     return MatchResult(
         status,

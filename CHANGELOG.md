@@ -1,6 +1,10 @@
 # Changelog
 
-Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow [SemVer](https://semver.org/).
+All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and the project uses [Semantic Versioning](https://semver.org/). While the major version is 0, minor releases may
+change behaviour; they are listed here.
+
+## [Unreleased]
 
 ## [0.1.0] - unreleased
 

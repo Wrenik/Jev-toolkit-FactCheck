@@ -60,7 +60,7 @@ def _passage_html(res: ClaimResult) -> str:
     m, text = res.match, res.source_text
     if not m or m.start is None or not text:
         return ""
-    segs = sorted(m.segments) or [(m.start, m.end)]
+    segs = sorted(m.segments) or m.spans
     out: list[str] = []
     pos = max(0, segs[0][0] - CONTEXT)
     out.append('<span class="ctx">' + ("…" if pos > 0 else "") + escape(text[pos : segs[0][0]]) + "</span>")
@@ -69,7 +69,9 @@ def _passage_html(res: ClaimResult) -> str:
             out.append('<span class="ctx"> … </span>')
         out.append("<mark>" + escape(text[s:e]) + "</mark>")
     tail_end = min(len(text), segs[-1][1] + CONTEXT)
-    out.append('<span class="ctx">' + escape(text[segs[-1][1] : tail_end]) + ("…" if tail_end < len(text) else "") + "</span>")
+    out.append(
+        '<span class="ctx">' + escape(text[segs[-1][1] : tail_end]) + ("…" if tail_end < len(text) else "") + "</span>"
+    )
     return "".join(out)
 
 
@@ -77,7 +79,7 @@ def _offsets(res: ClaimResult) -> str:
     m = res.match
     if not m or m.start is None:
         return ""
-    parts = ", ".join(f"{s}–{e}" for s, e in (m.segments or [(m.start, m.end)]))
+    parts = ", ".join(f"{s}–{e}" for s, e in m.spans)
     return f"characters {parts} of the extracted page text"
 
 
@@ -94,50 +96,75 @@ def _detail(res: ClaimResult, n: int, compact: bool) -> str:
     h.append(f'<div class="kv"><b>Source:</b> <code>{escape(res.claim.url)}</code></div>')
     link = res.deep_link
     if link and not compact:
-        h.append(f'<div class="kv"><a href="{escape(link, quote=True)}" target="_blank" rel="noopener noreferrer nofollow">'
-                 "Open the source at the quote</a> (browsers with text-fragment support scroll to and highlight it; others just open the page)</div>")
+        h.append(
+            f'<div class="kv"><a href="{escape(link, quote=True)}" target="_blank" rel="noopener noreferrer nofollow">'
+            "Open the source at the quote</a> (browsers with text-fragment support scroll to and highlight it; others just open the page)</div>"
+        )
     if res.fetch.get("title"):
         h.append(f'<div class="kv"><b>Page title:</b> {escape(str(res.fetch["title"]))}</div>')
     if not compact:
         h.append(f'<div class="kv"><b>Quote given:</b></div><blockquote>{escape(res.claim.quote)}</blockquote>')
     m = res.match
     if m and m.start is not None:
-        h.append(f'<div class="kv"><b>Match:</b> {escape(m.status)}'
-                 + (f", similarity {m.similarity:.2f}" if m.similarity is not None and m.similarity < 1 else "")
-                 + f", {escape(_offsets(res))}"
-                 + (f", {m.occurrences} occurrences" if m.occurrences > 1 else "") + "</div>")
+        h.append(
+            f'<div class="kv"><b>Match:</b> {escape(m.status)}'
+            + (f", similarity {m.similarity:.2f}" if m.similarity is not None and m.similarity < 1 else "")
+            + f", {escape(_offsets(res))}"
+            + (f", {m.occurrences} occurrences" if m.occurrences > 1 else "")
+            + "</div>"
+        )
         if not compact:
             h.append("<blockquote>" + _passage_html(res) + "</blockquote>")
         for d in m.differences[:4]:
-            h.append(f'<div class="kv"><b>Differs:</b> quote “{escape(d["quote"])}” vs source “{escape(d["source"])}”</div>')
+            h.append(
+                f'<div class="kv"><b>Differs:</b> quote “{escape(d["quote"])}” vs source “{escape(d["source"])}”</div>'
+            )
     elif m:
         h.append(f'<div class="kv"><b>Match:</b> {escape(m.status)} – {escape(m.note)}</div>')
     if res.flags:
-        h.append(f'<div class="kv"><b>Check this:</b> {escape("; ".join(res.flags))} (a prompt to look, not a verdict)</div>')
+        h.append(
+            f'<div class="kv"><b>Check this:</b> {escape("; ".join(res.flags))} (a prompt to look, not a verdict)</div>'
+        )
     if res.fetch.get("text_sha256"):
-        h.append(f'<div class="kv">Page text sha256 {escape(str(res.fetch["text_sha256"])[:16])}…, fetched from {escape(str(res.fetch.get("final_url") or res.claim.url))}</div>')
+        h.append(
+            f'<div class="kv">Page text sha256 {escape(str(res.fetch["text_sha256"])[:16])}…, fetched from {escape(str(res.fetch.get("final_url") or res.claim.url))}</div>'
+        )
     if m and m.flags:
         h.append(f'<div class="kv"><b>Quote flags:</b> {escape(", ".join(m.flags))}</div>')
     if j and j.ran and not compact:
         probs = ", ".join(f"{k} {v:.0%}" for k, v in sorted(j.probabilities.items(), key=lambda kv: -kv[1]))
-        h.append(f'<div class="kv"><b>Judge ({escape(j.model)}):</b> {escape(probs)}; out of context {j.p_out_of_context:.0%}</div>')
+        h.append(
+            f'<div class="kv"><b>Judge ({escape(j.model)}):</b> {escape(probs)}; out of context {j.p_out_of_context:.0%}</div>'
+        )
     if j and j.injection_reason:
-        h.append(f'<div class="kv"><b>Not judged:</b> passage looked like an injection ({escape(j.injection_reason)})</div>')
+        h.append(
+            f'<div class="kv"><b>Not judged:</b> passage looked like an injection ({escape(j.injection_reason)})</div>'
+        )
     if res.source_flags:
-        h.append(f'<div class="kv"><b>Source flags:</b> {escape(", ".join(res.source_flags))} (a flag to look at, not a verdict) {escape(res.source_note)}</div>')
+        h.append(
+            f'<div class="kv"><b>Source flags:</b> {escape(", ".join(res.source_flags))} (a flag to look at, not a verdict) {escape(res.source_note)}</div>'
+        )
     if res.fetch.get("dropped_hidden_chars"):
-        h.append(f'<div class="kv">{res.fetch["dropped_hidden_chars"]} characters of hidden text on the page were ignored.</div>')
+        h.append(
+            f'<div class="kv">{res.fetch["dropped_hidden_chars"]} characters of hidden text on the page were ignored.</div>'
+        )
     return "".join(h)
 
 
-def render_html(text: str, results: list[ClaimResult], *, title: str = "Fact check", rounds: list[dict[str, Any]] | None = None,
-                judge_note: str = "") -> str:
+def render_html(
+    text: str,
+    results: list[ClaimResult],
+    *,
+    title: str = "Fact check",
+    rounds: list[dict[str, Any]] | None = None,
+    judge_note: str = "",
+) -> str:
     numbered = {r.claim.id: i + 1 for i, r in enumerate(results)}
-    spans = sorted((r for r in results if r.claim.span), key=lambda r: r.claim.span)
+    spans = sorted((r for r in results if r.claim.span), key=lambda r: r.claim.span or (0, 0))
     body: list[str] = []
     pos = 0
     for r in spans:
-        s, e = r.claim.span
+        s, e = r.claim.span or (0, 0)
         if s < pos:
             continue
         body.append(escape(text[pos:s]))
@@ -158,16 +185,18 @@ def render_html(text: str, results: list[ClaimResult], *, title: str = "Fact che
         "This page checks support <b>by the cited source</b>, not that the source is true. It does not replace your own judgement.",
         judge_note or "Support is a judge probability, not a proof.",
     ]
-    evidence = "".join(f'<div class="ev" id="c{n}">{_detail(r, n, compact=False)}</div>' for n, r in
-                       ((numbered[r.claim.id], r) for r in results))
+    evidence = "".join(
+        f'<div class="ev" id="c{n}">{_detail(r, n, compact=False)}</div>'
+        for n, r in ((numbered[r.claim.id], r) for r in results)
+    )
     rounds_html = ""
     if rounds:
         rows = "".join(
-            f'<li>Round {escape(str(x.get("round")))}: {escape(str(x.get("summary", "")))}</li>' for x in rounds
+            f"<li>Round {escape(str(x.get('round')))}: {escape(str(x.get('summary', '')))}</li>" for x in rounds
         )
-        rounds_html = f"<h2>Correction rounds</h2><ul class=\"kv\">{rows}</ul>"
+        rounds_html = f'<h2>Correction rounds</h2><ul class="kv">{rows}</ul>'
     return (
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         f'<meta http-equiv="Content-Security-Policy" content="{escape(CSP)}">'
         '<meta name="referrer" content="no-referrer">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -176,6 +205,8 @@ def render_html(text: str, results: list[ClaimResult], *, title: str = "Fact che
         + "".join(f'<p class="limit">{n}</p>' for n in notes)
         + f'<ul class="sum">{summary}</ul>'
         + f'<div class="answer">{"".join(body)}</div>'
-        + "<h2>Evidence for each claim</h2>" + evidence + rounds_html
+        + "<h2>Evidence for each claim</h2>"
+        + evidence
+        + rounds_html
         + "</body></html>"
     )

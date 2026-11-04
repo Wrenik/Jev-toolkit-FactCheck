@@ -35,12 +35,20 @@ def run_set(name: str, judge) -> dict:
     rows = []
     for lab, res in zip(labelled, results):
         found = bool(res.match and res.match.found)
-        rows.append({
-            "id": lab["id"], "category": lab["category"], "label_state": lab["state"], "state": res.state,
-            "label_quote": lab["quote_exists"], "found": found, "match": res.match.status if res.match else None,
-            "label_support": lab["support"], "relation": res.judge.relation if res.judge and res.judge.ran else None,
-            "reason": res.reason,
-        })
+        rows.append(
+            {
+                "id": lab["id"],
+                "category": lab["category"],
+                "label_state": lab["state"],
+                "state": res.state,
+                "label_quote": lab["quote_exists"],
+                "found": found,
+                "match": res.match.status if res.match else None,
+                "label_support": lab["support"],
+                "relation": res.judge.relation if res.judge and res.judge.ran else None,
+                "reason": res.reason,
+            }
+        )
     return {"set": name, "rows": rows}
 
 
@@ -57,7 +65,10 @@ def score(run: dict) -> dict:
         "judge_layer": (len(judge_ok), len(judged)),
         "end_to_end": (len(e2e_ok), len(rows)),
         "by_category": {
-            c: (sum(1 for r in rows if r["category"] == c and r["state"] == r["label_state"]), sum(1 for r in rows if r["category"] == c))
+            c: (
+                sum(1 for r in rows if r["category"] == c and r["state"] == r["label_state"]),
+                sum(1 for r in rows if r["category"] == c),
+            )
             for c in sorted({r["category"] for r in rows})
         },
         "confusion": dict(Counter((r["label_support"], r["relation"]) for r in judged)),
@@ -67,7 +78,10 @@ def score(run: dict) -> dict:
 
 def format_report(run: dict, judge_name: str) -> str:
     s = score(run)
-    f = lambda t: f"{t[0]}/{t[1]}" + (f" ({t[0] / t[1]:.0%})" if t[1] else "")
+
+    def f(t):
+        return f"{t[0]}/{t[1]}" + (f" ({t[0] / t[1]:.0%})" if t[1] else "")
+
     lines = [
         f"set={run['set']}  judge={judge_name}  claims={s['n']}",
         f"  quote layer (found vs label, readable sources only): {f(s['quote_layer'])}",
@@ -78,7 +92,9 @@ def format_report(run: dict, judge_name: str) -> str:
     lines += [f"    {c:<32} {f(v)}" for c, v in s["by_category"].items()]
     lines.append("  failures (label -> got):")
     for r in s["failures"]:
-        lines.append(f"    {r['id']} [{r['category']}] {r['label_state']} -> {r['state']} ({r['reason']}, match={r['match']}, relation={r['relation']})")
+        lines.append(
+            f"    {r['id']} [{r['category']}] {r['label_state']} -> {r['state']} ({r['reason']}, match={r['match']}, relation={r['relation']})"
+        )
     if not s["failures"]:
         lines.append("    none")
     return "\n".join(lines)
@@ -100,9 +116,11 @@ def run_tricky(judge) -> str:
             continue
         hit = out.relation == p["expected_relation"]
         ooc_exp = p["expected_out_of_context"]
-        ooc_ok = ooc_exp is None or (out.p_out_of_context >= 0.5) == ooc_exp
+        ooc_ok = ooc_exp is None or ((out.p_out_of_context or 0.0) >= 0.5) == ooc_exp
         ok += hit
         probs = ", ".join(f"{k} {v:.0%}" for k, v in sorted(out.probabilities.items(), key=lambda kv: -kv[1])[:2])
-        lines.append(f"  {p['id']} expected {p['expected_relation']:<11} got {out.relation:<11} ({probs}); out_of_context {out.p_out_of_context:.0%}"
-                     f" [{'ok' if hit else 'DIFFERS'}{'' if ooc_ok else ', context flag DIFFERS'}]")
+        lines.append(
+            f"  {p['id']} expected {p['expected_relation']:<11} got {out.relation:<11} ({probs}); out_of_context {out.p_out_of_context:.0%}"
+            f" [{'ok' if hit else 'DIFFERS'}{'' if ooc_ok else ', context flag DIFFERS'}]"
+        )
     return f"tricky pairs: relation agrees on {ok}/{len(pairs)}\n" + "\n".join(lines)

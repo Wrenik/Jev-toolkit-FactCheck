@@ -20,7 +20,10 @@ _ADDRESSEE = re.compile(
     r"copilots?|gpt\w*|claude|gemini|you)\b",
     re.I,
 )
-_DIRECTIVE = re.compile(r"\b(?:must|should|shall|need to|have to|has to|required to|are to|please|ensure|make sure|always|never|do not|don't|only)\b", re.I)
+_DIRECTIVE = re.compile(
+    r"\b(?:must|should|shall|need to|have to|has to|required to|are to|please|ensure|make sure|always|never|do not|don't|only)\b",
+    re.I,
+)
 _STEER = re.compile(
     r"\b(?:mark|rate|label|report|classify|treat|consider|score|set|answer|respond|output|return|say|state|declare|"
     r"flag|confirm|verify|approve|accept|record|conclude)\w*\b[^.\n]{0,80}?\b(?:supported|verified|true|correct|accurate|confirmed|valid|approved|passed?)\b",
@@ -31,8 +34,13 @@ _OVERRIDE = re.compile(
     r"\b(?:instructions?|prompts?|rules?|guidelines?|context|directions?|checks?)\b",
     re.I,
 )
-_ROLE = re.compile(r"(?:^|\n)\s*(?:system|assistant|developer|admin)\s*[:>\]]|\[/?inst\]|<\|[a-z_]+\|>|###\s*(?:system|instruction)", re.I)
-_ALL_CLAIMS = re.compile(r"\b(?:every|all|each|any)\s+(?:the\s+)?(?:claims?|statements?|citations?|quotes?|sources?)\b", re.I)
+_ROLE = re.compile(
+    r"(?:^|\n)\s*(?:system|assistant|developer|admin)\s*[:>\]]|\[/?inst\]|<\|[a-z_]+\|>|###\s*(?:system|instruction)",
+    re.I,
+)
+_ALL_CLAIMS = re.compile(
+    r"\b(?:every|all|each|any)\s+(?:the\s+)?(?:claims?|statements?|citations?|quotes?|sources?)\b", re.I
+)
 
 
 def _view(text: str) -> str:
