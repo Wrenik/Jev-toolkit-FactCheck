@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jev_factcheck claims.json",
+  "description": "What an LLM writes and jev_factcheck reads. Everything is untrusted text; jev_factcheck validates and size-bounds it (see schema.py).",
+  "type": "object",
+  "required": ["claims"],
+  "additionalProperties": true,
+  "properties": {
+    "text": {
+      "type": "string",
+      "maxLength": 100000,
+      "description": "The answer text the claims come from. The report shows it with each claim underlined."
+    },
+    "claims": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "required": ["claim", "url", "quote"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,40}$", "description": "Unique per file. Default c1, c2, ... by position. Keep ids stable across correction rounds."},
+          "claim": {"type": "string", "minLength": 1, "maxLength": 600, "description": "One factual sentence, copied exactly from `text` so it can be marked there."},
+          "url": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "http(s) page that was opened. One source per claim."},
+          "quote": {"type": "string", "minLength": 1, "maxLength": 1500, "description": "Copied VERBATIM from that page. Use ... or [...] between separate pieces. Never a paraphrase."},
+          "topic": {"type": "string", "maxLength": 40, "default": "general", "description": "general, health, science, law, news, ... (selects your source list, if any)."},
+          "span": {
+            "type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2,
+            "description": "Optional [start, end) character offsets of the claim inside `text`. Spans must not overlap. If absent, the claim is marked where its exact text occurs in `text`."
+          }
+        }
+      }
+    }
+  }
+}

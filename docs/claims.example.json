@@ -1,0 +1,19 @@
+{
+  "text": "The Eiffel Tower is 330 metres tall. It was completed in 1889.",
+  "claims": [
+    {
+      "id": "c1",
+      "claim": "The Eiffel Tower is 330 metres tall.",
+      "url": "https://example.org/eiffel-tower",
+      "quote": "The tower is 330 metres (1,083 ft) tall",
+      "topic": "general"
+    },
+    {
+      "id": "c2",
+      "claim": "It was completed in 1889.",
+      "url": "https://example.org/eiffel-tower",
+      "quote": "Construction ... was completed on 31 March 1889",
+      "topic": "general"
+    }
+  ]
+}

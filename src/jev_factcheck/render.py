@@ -103,6 +103,10 @@ def _detail(res: ClaimResult, n: int, compact: bool) -> str:
             h.append(f'<div class="kv"><b>Differs:</b> quote “{escape(d["quote"])}” vs source “{escape(d["source"])}”</div>')
     elif m:
         h.append(f'<div class="kv"><b>Match:</b> {escape(m.status)} – {escape(m.note)}</div>')
+    if res.flags:
+        h.append(f'<div class="kv"><b>Check this:</b> {escape("; ".join(res.flags))} (a prompt to look, not a verdict)</div>')
+    if res.fetch.get("text_sha256"):
+        h.append(f'<div class="kv">Page text sha256 {escape(str(res.fetch["text_sha256"])[:16])}…, fetched from {escape(str(res.fetch.get("final_url") or res.claim.url))}</div>')
     if m and m.flags:
         h.append(f'<div class="kv"><b>Quote flags:</b> {escape(", ".join(m.flags))}</div>')
     if j and j.ran and not compact:

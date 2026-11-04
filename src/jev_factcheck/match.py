@@ -45,6 +45,11 @@ _QUOTES = {
 }
 _INVISIBLE = set("­​‌‍⁠﻿‎‏‪‫‬‭‮⁦⁧⁨⁩")
 _NEGATIONS = {"not", "no", "never", "none", "neither", "nor", "cannot", "without", "n't", "nothing", "nobody", "hardly"}
+_NUMBER_WORDS = set(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen "
+    "nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand million billion trillion half double triple "
+    "first second third fourth fifth majority minority".split()
+)
 _ELLIPSIS = re.compile(r"\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3,}|…)\s*")
 _TOKEN = re.compile(r"\d[\d.,]*\d%?|\d%?|[^\W\d_]+(?:'[^\W\d_]+)?|\S")
 
@@ -157,14 +162,72 @@ def _span(norm: Normalised, a: int, b: int) -> tuple[int, int]:
     return norm.starts[a], norm.ends[b - 1]
 
 
+_OPEN_CLOSE = {'"': '"', "“": "”", "„": "“", "«": "»", "‘": "’", "'": "'", "‚": "‘"}
+
+
+def _strip_wrapping_quotes(q: str) -> str:
+    """LLMs often put the quotation marks of the quote itself around it: "like this". Those are not source text."""
+    for _ in range(2):
+        if len(q) > 2 and q[0] in _OPEN_CLOSE and q[-1] in (_OPEN_CLOSE[q[0]], q[0]) and q[0] not in q[1:-1]:
+            q = q[1:-1].strip()
+        else:
+            break
+    return q
+
+
+def _cuts_number(original: str, s: int, e: int) -> bool:
+    """The match starts or ends inside a number ("grew 15" matching "grew 150")."""
+    if s > 0 and original[s].isdigit() and original[s - 1].isdigit():
+        return True
+    if e < len(original) and original[e - 1].isdigit() and (
+        original[e].isdigit() or (original[e] in ".," and e + 1 < len(original) and original[e + 1].isdigit())
+    ):
+        return True
+    return False
+
+
+_BEFORE = re.compile(r"[\w'’-]+")
+
+
+def _negated_before(original: str, s: int, quote_start: str) -> bool:
+    """A negation word shortly before the match, in the same sentence, that the quote does not contain."""
+    window = original[max(0, s - 40) : s]
+    cut = max(window.rfind(c) for c in (".", "!", "?", ";", chr(10)))
+    words = [w.lower().replace("’", "'") for w in _BEFORE.findall(window[cut + 1 :])][-3:]
+    return any(w in _NEGATIONS or w.endswith("n't") for w in words) and not any(
+        w in _NEGATIONS or w.endswith("n't") for w in quote_start.lower().split()[:3]
+    )
+
+
+def _audit(r: MatchResult, original: str, q: str) -> MatchResult:
+    """Boundary checks on a found quote: cutting a number turns it into 'altered'; a negation just before is flagged."""
+    spans = r.segments or [(r.start, r.end)]
+    if any(_cuts_number(original, a, b) for a, b in spans):
+        r.status, r.similarity = "altered", None
+        r.flags = r.flags + ["cuts_number"]
+        r.note = "the quote starts or ends in the middle of a number"
+        return r
+    if _negated_before(original, spans[0][0], q):
+        r.flags = r.flags + ["preceded_by_negation"]
+    return r
+
+
 def match_quote(original: str, quote: str) -> MatchResult:
     """Locate `quote` in `original`. Never raises on odd input; empty quotes are not_found."""
+    r = _match_quote(original, quote)
+    if r.found:
+        r = _audit(r, original, quote)
+    return r
+
+
+def _match_quote(original: str, quote: str) -> MatchResult:
     flags: list[str] = []
     q = quote.strip()
     if not q or not original:
         return MatchResult("not_found", note="empty quote or empty source text")
     if "&" in q:
         q = html.unescape(q)
+    q = _strip_wrapping_quotes(q)
     if len(q) < MIN_QUOTE_CHARS:
         flags.append("short_quote")
 
@@ -261,7 +324,7 @@ def _tokens(text: str) -> list[tuple[str, int, int]]:
 
 
 def _is_critical(token: str) -> bool:
-    return any(c.isdigit() for c in token) or token in _NEGATIONS or token.endswith("n't")
+    return any(c.isdigit() for c in token) or token in _NEGATIONS or token in _NUMBER_WORDS or token.endswith("n't")
 
 
 def _near(norm: Normalised, nq: str) -> MatchResult | None:

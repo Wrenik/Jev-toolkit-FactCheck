@@ -15,6 +15,7 @@ import gzip
 import hashlib
 import http.client
 import json
+import re
 import socket
 import ssl
 import time
@@ -34,6 +35,12 @@ MAX_BYTES = 2_000_000
 MAX_REDIRECTS = 5
 CONNECT_TIMEOUT = 8.0
 TOTAL_TIMEOUT = 20.0
+
+
+_HTTP_HINTS = {
+    401: " (login required)", 402: " (payment required: paywall?)", 403: " (forbidden: paywall or bot blocking?)",
+    404: " (page not found: wrong or invented URL?)", 410: " (page removed)", 429: " (rate limited)", 451: " (blocked for legal reasons)",
+}
 
 
 @dataclass
@@ -56,6 +63,7 @@ class FetchResult:
         d = asdict(self)
         d.pop("text")
         d["text_chars"] = len(self.text)
+        d["text_sha256"] = hashlib.sha256(self.text.encode("utf-8")).hexdigest() if self.text else ""
         return d
 
 
@@ -122,25 +130,34 @@ def real_transport(target: Target, ip: str, timeout: float) -> Response:
     return _HttpResponse(conn, conn.getresponse())
 
 
+_META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_.:-]+)""", re.I)
+_BOMS = ((b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"))
+
+
 def _decode(raw: bytes, content_type: str) -> str:
+    """Bytes -> text. Order: byte-order mark, charset header, <meta charset>, strict UTF-8, then Windows-1252
+    (the usual unlabelled legacy encoding); never raises."""
+    for bom, enc in _BOMS:
+        if raw.startswith(bom):
+            return raw.decode(enc, errors="replace")
     charset = None
     for part in content_type.split(";")[1:]:
         k, _, v = part.strip().partition("=")
         if k.lower() == "charset":
             charset = v.strip("\"' ")
-    if charset is None:
-        head = raw[:2048].lower()
-        i = head.find(b"charset=")
-        if i != -1:
-            charset = head[i + 8 : i + 40].split(b'"')[0].split(b"'")[0].split(b">")[0].split(b";")[0].split(b" ")[0].decode("ascii", "ignore")
-    for enc in (charset, "utf-8"):
-        if not enc:
-            continue
+    if not charset:
+        m = _META_CHARSET.search(raw[:4096])
+        if m:
+            charset = m.group(1).decode("ascii", "ignore")
+    if charset:
         try:
-            return raw.decode(enc, errors="strict" if enc == "utf-8" else "replace")
-        except (LookupError, UnicodeDecodeError):
-            continue
-    return raw.decode("utf-8", errors="replace")
+            return raw.decode(charset, errors="replace")
+        except LookupError:
+            pass
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
 
 
 def _read_body(resp: Response, limit: int) -> tuple[bytes | None, str]:
@@ -278,10 +295,11 @@ class Fetcher:
                 ctype_full = resp.headers.get("content-type", "").lower()
                 ctype = ctype_full.split(";")[0].strip()
                 if resp.status != 200:
-                    return FetchResult(url, False, "http_error", f"HTTP {resp.status}", current, resp.status, ctype, redirects=chain)
+                    return FetchResult(url, False, "http_error", f"HTTP {resp.status}{_HTTP_HINTS.get(resp.status, '')}", current, resp.status, ctype, redirects=chain)
                 if ctype and ctype not in ALLOWED_TYPES:
                     kind = "PDF" if ctype == "application/pdf" else ctype
-                    return FetchResult(url, False, "unsupported_type", f"content type {kind} is not read", current, 200, ctype, redirects=chain)
+                    hint = "; cite an HTML page that has the text" if kind == "PDF" else ""
+                    return FetchResult(url, False, "unsupported_type", f"content type {kind} is not read{hint}", current, 200, ctype, redirects=chain)
                 declared = resp.headers.get("content-length", "")
                 if declared.isdigit() and int(declared) > self.max_bytes * 2:
                     return FetchResult(url, False, "too_large", f"Content-Length {declared}", current, 200, ctype, redirects=chain)

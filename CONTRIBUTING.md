@@ -10,3 +10,5 @@ Thanks for looking. This is a small learning project, so the bar is "clear and h
 6. Evaluation: add new claims to a **new** held-out set and never tune the matcher or the verdict rules on a set you report on. The frozen `heldout.json` was run once; if you change rules because of it, say so and make a fresh set.
 
 Good first contributions: a quote the matcher gets wrong (with an inert example), a page-extraction case (tables, footnotes) with a fixture, a clearer HTML report.
+
+Regenerating generated docs: `python -m jev_factcheck demo --out docs/example_report.html --title "jev_factcheck example report (invented pages, stand-in judge)"`, and `docs/CLAUDE_PROMPT.md` plus `docs/claude-skill/SKILL.md` whenever `PROMPT` in `__main__.py` changes (a test checks they are in step).

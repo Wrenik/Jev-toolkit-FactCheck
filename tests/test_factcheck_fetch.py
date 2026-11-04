@@ -116,7 +116,7 @@ def test_content_type_and_http_errors():
     f, _ = fetcher({"http://a.test/p": FakeResp(headers={"Content-Type": "application/pdf"}, body=b"%PDF"),
                     "http://a.test/n": FakeResp(404), "http://a.test/g": FakeResp(403)})
     assert f.fetch("http://a.test/p").status == "unsupported_type"
-    assert f.fetch("http://a.test/n").status == "http_error" and f.fetch("http://a.test/g").detail == "HTTP 403"
+    assert f.fetch("http://a.test/n").status == "http_error" and f.fetch("http://a.test/g").detail.startswith("HTTP 403")
 
 
 def test_size_cap_and_gzip_bomb():

@@ -15,16 +15,18 @@ Part of the Jev tool family; the shared judge layer lives in [Jev-toolkit-usage]
 
 With the judge on, per claim whose quote was found, the claim, the quote and a short window (about 300 characters each side) of the matched passage go to **TypeSafe's Jev**, a US-hosted service whose data-processing location is not verified, after secret redaction (best effort). Nothing else is sent: not the rest of the page, not the answer, not the URL. `--no-judge` sends nothing anywhere. Jev is used because it is the only typed-answer judgement model on the market today; **the plan is to replace it with a local or European model** behind the `Judge` interface in `jev_core`; this package never imports the TypeSafe SDK. The tool also contacts the websites you cite, from your machine.
 
-## Install
+## Install (fresh virtual environment)
 
-Requires Python 3.11+. Until the repositories are public, install the sibling from a local clone:
+Requires Python 3.11+ and git. Until the repositories are public, install the sibling from a local clone (both repos side by side, e.g. `~/jev/Jev-toolkit-usage` and `~/jev/Jev-toolkit-FactCheck`). Create the environment somewhere else than inside the repos:
 
 ```bash
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ../Jev-toolkit-usage       # Windows; use .venv/bin/python elsewhere
-.venv/Scripts/python -m pip install -e ".[dev]" --no-deps
+python -m venv ~/jev-venv
+source ~/jev-venv/bin/activate              # Windows PowerShell: ~\jev-venv\Scripts\Activate.ps1
+cd ~/jev/Jev-toolkit-FactCheck
+python -m pip install -e ../Jev-toolkit-usage
+python -m pip install -e . --no-deps        # add ".[dev]" for the tests
 # optional: the injection scanner adds its offline layers to the passage check
-.venv/Scripts/python -m pip install -e ../Jev-toolkit-Scanner --no-deps
+python -m pip install -e ../Jev-toolkit-Scanner --no-deps
 ```
 
 Once public: `pip install "jev-toolkit-factcheck @ git+https://github.com/Wrenik/Jev-toolkit-FactCheck.git"` (with the scanner: `pip install "jev-toolkit-factcheck[scanner] @ git+..."`). Data (logs, cache, report defaults) lives in `JEV_HOME` (default `~/.jev-toolkit`); a `.env` with `TYPESAFE_API_KEY` there is only needed for the real judge. The scanner is **optional**: without it the built-in rules in `jev_factcheck.guard` are used on their own.
@@ -32,15 +34,39 @@ Once public: `pip install "jev-toolkit-factcheck @ git+https://github.com/Wrenik
 ## Try it in 60 seconds (offline, no key)
 
 ```bash
-python -m jev_factcheck demo                 # invented pages, word-overlap stand-in judge (not Jev)
-python -m jev_factcheck eval                 # the labelled sets with the stand-in judge (a baseline)
-python -m jev_factcheck prompt               # the instructions to paste into Claude Code
+python -m jev_factcheck demo --out demo.html   # invented pages, word-overlap stand-in judge (not Jev)
+python -m jev_factcheck eval                   # the labelled sets with the stand-in judge (a baseline)
+python -m jev_factcheck prompt                 # the instructions to paste into Claude
 ```
 
-The demo writes its report under `JEV_HOME/var/` (the path is printed); open it and hover the underlined claims.
+Open `demo.html` and hover (or Tab to) the underlined claims. A ready-made report is committed at [docs/example_report.html](docs/example_report.html) (download it and open it in a browser; it is a single file, no scripts).
+
+## Check your own claims.json
+
+1. Ask Claude to produce one. Paste the text from [docs/CLAUDE_PROMPT.md](docs/CLAUDE_PROMPT.md) (or `python -m jev_factcheck prompt`), or install [docs/claude-skill/SKILL.md](docs/claude-skill/SKILL.md) as a Claude Code skill. Claude needs web access, because it must open the pages and copy the quotes.
+2. The file format ([JSON Schema](src/jev_factcheck/data/claims.schema.json), `python -m jev_factcheck schema`; example: [docs/claims.example.json](docs/claims.example.json)):
+
+   ```json
+   {"text": "The answer text.",
+    "claims": [{"id": "c1", "claim": "One factual sentence, copied from text.",
+                "url": "https://example.org/page", "quote": "Copied VERBATIM from that page ... pieces joined by ...",
+                "topic": "general"}]}
+   ```
+
+   `id`, `topic` and `span` are optional. Limits: 200 claims, 600 characters per claim, 1500 per quote.
+3. `python -m jev_factcheck validate claims.json` checks the shape without touching the network.
+4. `python -m jev_factcheck check claims.json --out report.html --no-judge` fetches the cited pages and checks that each quote exists (nothing is sent to any judge). Leave out `--no-judge` once `TYPESAFE_API_KEY` is set up; add `--json results.json` for a machine-readable copy with offsets and probabilities. Add `--state state.json` to get `corrections.json` and the 3-round correction loop.
+5. No network handy? `python -m jev_factcheck check examples/claims.json --fixtures examples/fixtures --no-judge` runs the same on a local page; claim c2 has a planted wrong number, which the check catches.
+
+The exit code is 0 only when every claim is supported (or quote-only), 1 otherwise, 2 for a malformed input.
+
+## What the report tells you
+
+Five states per claim: supported (quote found and the judge rates it as supporting, with a probability), not supported, quote not found (fabricated, paraphrased, a changed number or a dropped "not", or the quote stops in the middle of a number), source unavailable (blocked, paywall, PDF, script-rendered, network), and quote only (found, support not judged). Extra "check this" notes appear when the claim has a number the quote lacks, or a negation that differs. They are prompts to look, not verdicts.
 
 ## Layout
 
+* `examples/`: a claims file plus a local page for the offline `check` run. `docs/`: example report, prompt, skill, claims examples.
 * `src/jev_factcheck/`: `match.py` (quote matching), `fetch.py` + `netguard.py` + `htmltext.py` (safe fetching), `judging.py` + `guard.py` (what the judge sees), `verdict.py`, `checker.py`, `loop.py` (correction rounds), `sources.py` (per-topic lists), `render.py` (HTML), `evaluate.py` + `evalset/` (labelled sets).
 * [docs/FACT_CHECKER.md](docs/FACT_CHECKER.md): design, evaluation with failures, limits, **prior art**.
 

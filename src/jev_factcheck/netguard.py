@@ -10,6 +10,7 @@ The page URL comes from an LLM, so it is attacker-influenced. Rules:
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -40,7 +41,12 @@ class Target:
 
 
 # Extra ranges that ipaddress.is_global may let through or that deserve an explicit reason.
-_EXTRA_BLOCKED = [ipaddress.ip_network(n) for n in ("100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "169.254.0.0/16", "fc00::/7", "fe80::/10")]
+_EXTRA_BLOCKED = [ipaddress.ip_network(n) for n in ("100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "169.254.0.0/16", "fc00::/7", "fe80::/10", "fec0::/10",
+                                                    "0.0.0.0/8", "240.0.0.0/4")]
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")  # well-known NAT64 prefix: the last 32 bits are an IPv4 address
+_NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")  # local-use NAT64 (RFC 8215): not checkable
+_V4_TRANSLATED = ipaddress.ip_network("::ffff:0:0:0/96")  # IPv4-translated (SIIT, RFC 2765)
+_LEGACY_IPV4 = re.compile(r"^(?:0x[0-9a-f]*|[0-9]+)(?:\.(?:0x[0-9a-f]*|[0-9]+)){0,3}$", re.I)
 
 
 def is_public_ip(value: str) -> bool:
@@ -51,6 +57,10 @@ def is_public_ip(value: str) -> bool:
     if isinstance(ip, ipaddress.IPv6Address):
         if ip.ipv4_mapped is not None:
             ip = ip.ipv4_mapped
+        elif ip in _NAT64 or ip in _V4_TRANSLATED:
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        elif ip in _NAT64_LOCAL:
+            return False
         elif ip.sixtofour is not None and not ip.sixtofour.is_global:
             return False
         elif ip.teredo is not None:
@@ -93,10 +103,21 @@ def parse_target(url: str) -> Target:
             raise BlockedURL("bad_idna_host", "host is not ASCII after IDNA")
     if any(label == "" or len(label) > 63 for label in host.split(".")):
         raise BlockedURL("malformed_host", host)
+    if _LEGACY_IPV4.match(host) and not _is_dotted_quad(host):
+        # 2130706433, 0x7f.1, 0177.0.0.1, 127.1: some resolvers read these as IPv4. Never needed for a real site.
+        raise BlockedURL("obfuscated_ip", host)
     path = parts.path or "/"
     if parts.query:
         path += "?" + parts.query
     return Target(scheme, host, port, path, url)
+
+
+def _is_dotted_quad(host: str) -> bool:
+    try:
+        ipaddress.IPv4Address(host)
+        return True
+    except ValueError:
+        return False
 
 
 def system_resolver(host: str, port: int) -> list[str]:

@@ -1,0 +1,11 @@
+{
+  "text": "The Harbor Bridge opened in 1932. It carries eight lanes. The toll ended in 1990.",
+  "claims": [
+    {"id": "c1", "claim": "The Harbor Bridge opened in 1932.", "url": "https://fixture.test/bridge",
+     "quote": "The Harbor Bridge opened to traffic in 1932.", "topic": "general"},
+    {"id": "c2", "claim": "It carries eight lanes.", "url": "https://fixture.test/bridge",
+     "quote": "It carries eight lanes and is 1,149 metres long.", "topic": "general"},
+    {"id": "c3", "claim": "The toll ended in 1990.", "url": "https://fixture.test/bridge",
+     "quote": "The toll was abolished in 1990 after a public vote.", "topic": "general"}
+  ]
+}

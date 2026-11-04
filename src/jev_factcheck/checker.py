@@ -64,6 +64,8 @@ def summarize(results: list[ClaimResult]) -> str:
     for r in results:
         if r.state != "supported":
             lines.append(f"  - {r.claim.id}: {r.explanation}")
+        if r.flags:
+            lines.append(f"  - {r.claim.id}: check this: {'; '.join(r.flags)}")
         if r.source_flags:
             lines.append(f"  - {r.claim.id}: source flag {', '.join(r.source_flags)} (a flag, not a verdict)")
     lines.append("This checks support by the cited source, not that the source is true.")
