@@ -5,8 +5,6 @@
 ![status](https://img.shields.io/badge/status-alpha-orange)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-(The badges start working once the repository is public.)
-
 A fact checker with **hover evidence**. The LLM lists, per claim, a source URL and a **verbatim quote**; plain code checks that the quote really exists in the fetched page (exact and normalised matching, with character offsets); a judgement model ([TypeSafe Jev](https://docs.typesafe.ai)) rates whether the quoted passage supports the claim (with a probability); unusual source domains are flagged against your own per-topic lists; failures go back to the LLM for correction under a hard round limit that also stops when the source simply lacks the information. The output is one static HTML page: hover (or focus) a claim to see source, URL, quote and the matched passage highlighted with offsets.
 
 ## Status and limits
@@ -20,21 +18,21 @@ A fact checker with **hover evidence**. The LLM lists, per claim, a source URL a
 
 Want all six tools? Use [the install script](https://github.com/Wrenik/Jev-toolkit-usage/blob/main/docs/INSTALL_ALL.md) (`scripts/install_all.ps1` or `.sh` in Jev-toolkit-usage) instead of the steps below.
 
-Requires Python 3.11+ and git. Until the repositories are public, install the sibling from a local clone (both repos side by side, e.g. `~/jev/Jev-toolkit-usage` and `~/jev/Jev-toolkit-FactCheck`). Create the environment somewhere else than inside the repos:
+Requires Python 3.11+ and git. Create the environment somewhere else than inside a clone:
 
 ```bash
 python -m venv ~/jev-venv
 source ~/jev-venv/bin/activate              # Windows PowerShell: ~\jev-venv\Scripts\Activate.ps1
-cd ~/jev/Jev-toolkit-FactCheck
-python -m pip install -e ../Jev-toolkit-usage
-python -m pip install -e . --no-deps        # for the tests also: python -m pip install pytest
+python -m pip install "git+https://github.com/Wrenik/Jev-toolkit-FactCheck.git"
 # optional: the injection scanner adds its offline layers to the passage check
-python -m pip install -e ../Jev-toolkit-Scanner --no-deps
+python -m pip install "git+https://github.com/Wrenik/Jev-toolkit-Scanner.git"
 ```
+
+Development, from clones side by side: `pip install -e ../Jev-toolkit-usage && pip install -e ".[dev]"`.
 
 Optional PDF input: `python -m pip install pypdf` (or the `[pdf]` extra).
 
-Once public: `pip install "jev-toolkit-factcheck @ git+https://github.com/Wrenik/Jev-toolkit-FactCheck.git"` (with the scanner: `pip install "jev-toolkit-factcheck[scanner] @ git+..."`). Data (logs, cache, report defaults) lives in `JEV_HOME` (default `~/.jev-toolkit`); a `.env` with `TYPESAFE_API_KEY` there is only needed for the real judge. The scanner is **optional**: without it the built-in rules in `jev_factcheck.guard` are used on their own.
+Alternatively: `pip install "jev-toolkit-factcheck @ git+https://github.com/Wrenik/Jev-toolkit-FactCheck.git"` (with the scanner: `pip install "jev-toolkit-factcheck[scanner] @ git+..."`). Data (logs, cache, report defaults) lives in `JEV_HOME` (default `~/.jev-toolkit`); a `.env` with `TYPESAFE_API_KEY` there is only needed for the real judge. The scanner is **optional**: without it the built-in rules in `jev_factcheck.guard` are used on their own.
 
 ## Quick try (offline, no key)
 
@@ -94,7 +92,7 @@ See "Prior art" in [docs/FACT_CHECKER.md](docs/FACT_CHECKER.md) (AIS, ALCE, Attr
 | **Jev-toolkit-FactCheck** (this one) | fact checker with hover evidence | usage (Scanner optional) |
 | [Jev-toolkit-Sources](https://github.com/Wrenik/Jev-toolkit-Sources) | source restriction (allowlist policy) | usage, FactCheck |
 
-All six on one machine: [docs/INSTALL_ALL.md](https://github.com/Wrenik/Jev-toolkit-usage/blob/main/docs/INSTALL_ALL.md) (a script does it). The links work once the repositories are public.
+All six on one machine: [docs/INSTALL_ALL.md](https://github.com/Wrenik/Jev-toolkit-usage/blob/main/docs/INSTALL_ALL.md) (a script does it). All six repositories are public.
 
 ## Contributing, security, license
 
